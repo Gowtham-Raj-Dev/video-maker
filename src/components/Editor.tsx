@@ -6,11 +6,12 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
+import { Logo } from "@/components/Logo";
 import { Select, type Option } from "@/components/Select";
 import { usePlayer } from "@/components/usePlayer";
 import { buildTimeline } from "@/engine/audio";
 import { BACKGROUNDS } from "@/engine/backgrounds";
-import { CHARACTERS, VOICES, characterById } from "@/engine/characters";
+import { CHARACTERS, STYLES, VOICES, characterById } from "@/engine/characters";
 import { canEncodeMp4, exportMp4, exportRecording, toSrt, type Quality } from "@/engine/export";
 import { checkKey, speak, splitKeys, withKeys, writeMeta, writeScript, type VideoMeta } from "@/engine/gemini";
 import { LANGUAGES, MOODS, SAMPLES, defaultProject, parseScript, syncCast } from "@/engine/script";
@@ -108,6 +109,8 @@ export function Editor() {
   const [assets, setAssets] = useState<Assets>(EMPTY_ASSETS);
   const [assetNames, setAssetNames] = useState({ bg: "", music: "" });
   const [testing, setTesting] = useState("");
+  /** The visitor chose to watch without a voice: stop covering the stage. */
+  const [draftOk, setDraftOk] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scriptRef = useRef<HTMLTextAreaElement>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
@@ -361,7 +364,7 @@ export function Editor() {
 
   const fileName = (project.title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "cartoon-video").toLowerCase();
 
-  const characterOptions: Array<Option<string>> = CHARACTERS.map((c) => ({ value: c.id, label: c.name, hint: c.blurb, icon: <Avatar id={c.id} size={30} /> }));
+  const characterOptions: Array<Option<string>> = CHARACTERS.map((c) => ({ value: c.id, label: c.name, hint: c.blurb, group: STYLES.find((s) => s.id === c.style)?.name, icon: <Avatar id={c.id} size={30} /> }));
   const voiceOptions: Array<Option<string>> = VOICES.map((v) => ({ value: v.name, label: v.name, hint: v.tone, group: v.kind === "F" ? "Female voices" : "Male voices" }));
   const lineOptions: Array<Option<string>> = [
     ...project.cast.map((c) => ({ value: c.name, label: c.name, group: "In this video", icon: <Avatar id={c.characterId} size={30} /> })),
@@ -376,9 +379,7 @@ export function Editor() {
     <div className="ed">
       <header className="ed-top">
         <Link href="/" className="display" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", fontSize: 17 }} title="Back to the home page">
-          <span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: "var(--fg)" }}>
-            <Clapperboard size={17} color="#fff" />
-          </span>
+          <Logo size={30} />
           <span className="hidden sm:inline">{SITE.name}</span>
         </Link>
         <span style={{ flex: 1 }} />
@@ -497,19 +498,24 @@ export function Editor() {
               <div>
                 <h3 className="display" style={{ fontSize: 16, marginBottom: 4 }}>Character library · {CHARACTERS.length}</h3>
                 <p className="hint" style={{ marginBottom: 10 }}>Tap a character to give them a line in the script.</p>
-                <div className="lib-grid">
-                  {CHARACTERS.map((c) => {
-                    const inVideo = project.cast.some((m) => m.characterId === c.id);
-                    return (
-                      <button key={c.id} type="button" className="lib-card" data-in={inVideo} onClick={() => insert(`${c.name}: `)} title={`${c.name} — ${c.blurb}. Voice: ${c.voice}`}>
-                        <Avatar id={c.id} size={58} />
-                        <b>{c.name}</b>
-                        <small>{c.blurb}</small>
-                        {inVideo && <span className="lib-badge">In video</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+                {STYLES.map((style) => (
+                  <div key={style.id} style={{ marginBottom: 16 }}>
+                    <p className="lbl" style={{ margin: "4px 0 8px" }}>{style.name}</p>
+                    <div className="lib-grid">
+                      {CHARACTERS.filter((c) => c.style === style.id).map((c) => {
+                        const inVideo = project.cast.some((m) => m.characterId === c.id);
+                        return (
+                          <button key={c.id} type="button" className="lib-card" data-in={inVideo} onClick={() => insert(`${c.name}: `)} title={`${c.name} — ${c.blurb}. Voice: ${c.voice}`}>
+                            <Avatar id={c.id} size={58} />
+                            <b>{c.name}</b>
+                            <small>{c.blurb}</small>
+                            {inVideo && <span className="lib-badge">In video</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -703,7 +709,7 @@ export function Editor() {
           </div>
           <div className="ed-stage">
             <canvas ref={player.canvasRef} width={player.width} height={player.height} onClick={playOrVoice} role="img" aria-label="Video preview. Press to play or pause." />
-            {!voices && !busy && !player.playing && parsed.lines.length > 0 && (
+            {!voices && !busy && !player.playing && !draftOk && parsed.lines.length > 0 && (
               <div className="voice-gate">
                 <span className="voice-gate-icon" aria-hidden="true"><Volume2 size={26} /></span>
                 <strong>No voice yet</strong>
@@ -715,7 +721,7 @@ export function Editor() {
                 <button type="button" className="btn btn-primary btn-lg" onClick={playOrVoice}>
                   {keys.length ? <><Play size={18} /> Play with voice</> : <><KeyRound size={18} /> Add Gemini key</>}
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={player.play}>or watch the silent draft</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDraftOk(true); player.play(); }}>or watch the silent draft</button>
               </div>
             )}
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { characterById, drawCharacter } from "@/engine/characters";
+import { BODY, characterById, drawCharacter, isThin } from "@/engine/characters";
 
 /** A character's face, drawn the same way the video draws it. */
 export function Avatar({ id, size = 64, tint = "#EFEDE7" }: { id: string; size?: number; tint?: string }) {
@@ -15,10 +15,18 @@ export function Avatar({ id, size = 64, tint = "#EFEDE7" }: { id: string; size?:
     ctx.clearRect(0, 0, px, px);
     ctx.fillStyle = tint;
     ctx.fillRect(0, 0, px, px);
-    // Hats need headroom; children are drawn at a grown-up's size here.
-    const s = (look.hat === "chef" ? 0.33 : look.hat ? 0.37 : 0.4) / (look.size ?? 1);
-    const headY = look.hat === "chef" ? 126 : look.hat ? 116 : 108;
-    drawCharacter(ctx, px / 2 - 10 * s * (look.size ?? 1), headY + 830 * s * (look.size ?? 1), look, { t: 1, mood: "happy", scale: s });
+    const size = look.size ?? 1;
+    if (isThin(look)) {
+      // Rico style: the head (radius 150) sits 830 units up.
+      const k = look.hat === "chef" ? 0.33 : look.hat ? 0.37 : 0.4;
+      const headY = look.hat === "chef" ? 126 : look.hat ? 116 : 108;
+      drawCharacter(ctx, px / 2 - 10 * k, headY + 830 * k, look, { t: 1, mood: "happy", scale: k / size });
+    } else {
+      // Machan style: the head (radius 118) sits 540 units up; hats sit a little lower.
+      const k = look.hat ? 0.46 : 0.52;
+      const headY = look.hat === "chef" ? 132 : look.hat ? 118 : 104;
+      drawCharacter(ctx, px / 2 - 12 * k, headY + 540 * k, look, { t: 1, mood: "happy", scale: k / (BODY * size) });
+    }
   }, [id, tint]);
   return (
     <canvas

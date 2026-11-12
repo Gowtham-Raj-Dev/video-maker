@@ -1,10 +1,12 @@
-import { ArrowRight, Clapperboard } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Figure } from "@/components/Figure";
-import { LanguageDemo } from "@/components/LanguageDemo";
+import { HeroProduct } from "@/components/HeroProduct";
+import { Logo } from "@/components/Logo";
+import { SiteFooter } from "@/components/SiteFooter";
 import { BACKGROUNDS } from "@/engine/backgrounds";
-import { CHARACTERS, VOICES } from "@/engine/characters";
-import { FAQ, NETWORK_LINKS, SITE } from "@/lib/site";
+import { CHARACTERS, STYLES, VOICES } from "@/engine/characters";
+import { FAQ, SITE } from "@/lib/site";
 
 const LINES: Array<{ name: string; note: string; text: string }> = [
   { name: "Tamil", note: "Tamil voice, Tamil captions", text: "அம்மா, நான்தான் டீச்சரோட ஃபேவரிட் ஸ்டூடன்ட்!" },
@@ -39,7 +41,7 @@ export default function Home() {
       <header className="nav">
         <div className="wrap nav-row">
           <Link href="/" className="brand">
-            <span className="brand-mark" aria-hidden="true"><Clapperboard size={15} color="#fff" /></span>
+            <Logo size={28} />
             {SITE.name}
           </Link>
           <nav className="nav-links" aria-label="Sections">
@@ -54,21 +56,20 @@ export default function Home() {
 
       <main>
         <section className="hero">
-          <div className="wrap hero-grid">
-            <div>
-              <h1 className="hero-title">
-                Your script, <em>performed</em> by cartoon actors.
-              </h1>
-              <p className="hero-sub">
-                Write a dialogue and {SITE.name} turns it into a finished short: {CHARACTERS.length} characters, real voices, lip sync and captions in Tamil, Telugu, Hindi and English.
-              </p>
-              <div className="hero-cta">
-                <Link href="/editor/" className="btn btn-primary btn-lg">Start a video <ArrowRight size={17} /></Link>
-                <a href="#cast" className="text-link">Meet the cast</a>
-              </div>
-              <p className="hero-meta">Free to use · Runs in your browser · Voices with your own Gemini API key</p>
+          <div className="wrap hero-center">
+            <p className="hero-kicker">Cartoon video maker for Tamil, Telugu, Hindi &amp; English</p>
+            <h1 className="hero-title">Turn a script into a talking cartoon video.</h1>
+            <p className="hero-sub">
+              Write the dialogue. {CHARACTERS.length} ready-made characters speak it with real voices, lip sync and word-by-word captions — exported as an MP4 for Shorts, Reels and YouTube.
+            </p>
+            <div className="hero-cta">
+              <Link href="/editor/" className="btn btn-primary btn-lg">Start a video — free <ArrowRight size={17} /></Link>
+              <a href="#how" className="btn btn-lg">See how it works</a>
             </div>
-            <LanguageDemo />
+            <p className="hero-meta">No sign-up · No watermark · Runs in your browser with your own Gemini API key</p>
+          </div>
+          <div className="wrap hero-shot">
+            <HeroProduct />
           </div>
         </section>
 
@@ -88,18 +89,26 @@ export default function Home() {
             <div className="section-head">
               <h2 className="section-title">Meet the cast.</h2>
               <p className="section-sub">
-                {CHARACTERS.length} characters, each with a voice of their own — from {VOICES.length} — and every one of them can be recast. Write any name in your script and someone steps in.
+                {CHARACTERS.length} characters in two drawing styles, each with a voice of their own (from {VOICES.length}). Write any name in your script and someone steps in — recast them any time.
               </p>
             </div>
-            <div className="cast-grid">
-              {CHARACTERS.map((c) => (
-                <div key={c.id} className="cast-tile">
-                  <Figure id={c.id} height={140} />
-                  <strong>{c.name}</strong>
-                  <span>{c.blurb}</span>
+            {STYLES.map((style) => (
+              <div key={style.id} className="cast-group">
+                <div className="cast-group-head">
+                  <h3>{style.name}</h3>
+                  <p>{style.blurb} · {CHARACTERS.filter((c) => c.style === style.id).length} characters</p>
                 </div>
-              ))}
-            </div>
+                <div className="cast-grid">
+                  {CHARACTERS.filter((c) => c.style === style.id).map((c) => (
+                    <div key={c.id} className="cast-tile">
+                      <Figure id={c.id} height={140} />
+                      <strong>{c.name}</strong>
+                      <span>{c.blurb}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -198,23 +207,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="foot">
-        <div className="wrap">
-          <nav aria-label="CodeLove network">
-            <h2>CodeLove network</h2>
-            <ul>
-              {NETWORK_LINKS.map((l) => (
-                <li key={l.href}><a href={l.href} title={l.title}>{l.label}</a></li>
-              ))}
-            </ul>
-          </nav>
-          <p className="foot-line">
-            Built by <a href={SITE.creatorUrl}>{SITE.creator}</a> · <a href={SITE.brandUrl}>{SITE.brand}</a> · <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
-            {" · "}<a href="https://codelove.in/legal/privacy">Privacy</a> · <a href="https://codelove.in/legal/terms">Terms</a>
-            <br />Voices by Google Gemini with your own API key. {SITE.name} is not affiliated with Google.
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

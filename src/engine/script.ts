@@ -81,12 +81,23 @@ export function syncCast(lines: Line[], cast: CastMember[]): CastMember[] {
   const names = [...new Set(lines.map((l) => l.speaker))];
   const kept = names.map((name) => cast.find((c) => c.name.toLowerCase() === name.toLowerCase()));
   const taken = new Set(kept.filter(Boolean).map((c) => c!.characterId));
+  // First every name that is a character's own ("Machan", "Rico Meena"), so a stranger can't take it; then the rest.
+  const slug = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "-");
+  const chosen = names.map((name, i) => {
+    if (kept[i]) return kept[i]!.characterId;
+    const own = CHARACTERS.find((c) => !taken.has(c.id) && (c.id === slug(name) || c.name.toLowerCase() === name.trim().toLowerCase()));
+    if (own) taken.add(own.id);
+    return own?.id ?? null;
+  });
   return names.map((name, i) => {
     const existing = kept[i];
     if (existing) return { ...existing, name };
-    const byName = CHARACTERS.find((c) => !taken.has(c.id) && (c.name.toLowerCase() === name.toLowerCase() || c.id === name.toLowerCase()));
-    const pick = byName ?? CHARACTERS.find((c) => !taken.has(c.id)) ?? CHARACTERS[i % CHARACTERS.length];
-    taken.add(pick.id);
+    let id = chosen[i];
+    if (!id) {
+      id = (CHARACTERS.find((c) => !taken.has(c.id)) ?? CHARACTERS[i % CHARACTERS.length]).id;
+      taken.add(id);
+    }
+    const pick = CHARACTERS.find((c) => c.id === id)!;
     return { name, characterId: pick.id, voice: pick.voice };
   });
 }
