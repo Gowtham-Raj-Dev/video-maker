@@ -1,0 +1,29 @@
+{
+  "name": "video-maker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Video Maker — type a script, get a talking cartoon video with lip sync and subtitles. Runs in the browser with your own Gemini API key.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mp4-muxer": "^5.2.1",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/dom-webcodecs": "^0.1.13",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.9.3"
+  }
+}
