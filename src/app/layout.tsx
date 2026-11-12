@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Analytics } from "@/components/Analytics";
 import { FAQ, SITE } from "@/lib/site";
 
 export const viewport: Viewport = { themeColor: "#F6F4EF", width: "device-width", initialScale: 1 };
@@ -67,7 +68,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

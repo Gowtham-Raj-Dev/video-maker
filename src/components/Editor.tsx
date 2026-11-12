@@ -6,6 +6,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Avatar } from "@/components/Avatar";
+import { FeatureVote } from "@/components/FeatureVote";
 import { Logo } from "@/components/Logo";
 import { Select, type Option } from "@/components/Select";
 import { usePlayer } from "@/components/usePlayer";
@@ -19,6 +20,7 @@ import { clearVoices, loadKeys, loadProject, saveKeys, saveProject } from "@/eng
 import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline } from "@/engine/types";
 import { recordVoices, type LineVoice } from "@/engine/voice";
 import { SITE } from "@/lib/site";
+import { UTUBEFLOW_URL, sendToUTubeFlow } from "@/lib/utubeflow";
 
 type Tab = "script" | "cast" | "scene" | "captions" | "audio" | "key" | "export";
 type Status = { phase: "idle" } | { phase: "voice" | "video" | "writing"; note: string; share: number };
@@ -362,6 +364,22 @@ export function Editor() {
     }
   }
 
+  const [flow, setFlow] = useState<{ state: "idle" | "opening" | "linked" | "done" | "error"; text: string }>({ state: "idle", text: "" });
+  async function sendToFlow() {
+    if (!video) return;
+    setFlow({ state: "opening", text: "Opening UTubeFlow… sign in there if it asks." });
+    try {
+      const description = meta?.description ?? project.script.split("\n").filter((l) => l.includes(":")).map((l) => l.replace(/\s*\([^)]*\)\s*:/, ":").split("|").pop()!.trim()).join("\n");
+      const count = await sendToUTubeFlow(
+        { blob: video.blob, fileName: `${fileName}.${video.ext}`, title: meta?.title || project.title || "Cartoon video", description, kind: project.format === "9:16" ? "short" : "video" },
+        () => setFlow({ state: "linked", text: "Connected — sending the video…" }),
+      );
+      setFlow({ state: "done", text: count ? "Sent! It's in your UTubeFlow upload list — schedule it there." : "UTubeFlow got the message but no video. Try again." });
+    } catch (e) {
+      setFlow({ state: "error", text: messageOf(e) });
+    }
+  }
+
   const fileName = (project.title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "cartoon-video").toLowerCase();
 
   const characterOptions: Array<Option<string>> = CHARACTERS.map((c) => ({ value: c.id, label: c.name, hint: c.blurb, group: STYLES.find((s) => s.id === c.style)?.name, icon: <Avatar id={c.id} size={30} /> }));
@@ -498,6 +516,11 @@ export function Editor() {
               <div>
                 <h3 className="display" style={{ fontSize: 16, marginBottom: 4 }}>Character library · {CHARACTERS.length}</h3>
                 <p className="hint" style={{ marginBottom: 10 }}>Tap a character to give them a line in the script.</p>
+                <div className="own-mini">
+                  <b>Your own character</b>
+                  <span>Design one with your own face, hair and outfit — coming soon. When 100 people ask, we build it.</span>
+                  <FeatureVote feature="own-character" compact />
+                </div>
                 {STYLES.map((style) => (
                   <div key={style.id} style={{ marginBottom: 16 }}>
                     <p className="lbl" style={{ margin: "4px 0 8px" }}>{style.name}</p>
@@ -661,6 +684,16 @@ export function Editor() {
                   <div className="grid grid-cols-2 gap-2">
                     <button type="button" className="btn btn-sm" onClick={() => download(new Blob([toSrt(timeline)], { type: "text/plain" }), `${fileName}.srt`)}><Captions size={14} /> Subtitles .srt</button>
                     <button type="button" className="btn btn-sm" onClick={aiMeta}><Sparkles size={14} /> Title &amp; tags</button>
+                  </div>
+                  <div className="flow-card">
+                    <div>
+                      <b>Upload &amp; schedule on YouTube</b>
+                      <p>Send this video to <a href={UTUBEFLOW_URL} target="_blank" rel="noopener noreferrer">UTubeFlow</a>, our free YouTube scheduler — no download needed. {meta ? "Your AI title and description go with it." : "Tip: make a title & tags first and they go with it."}</p>
+                    </div>
+                    <button type="button" className="btn btn-primary" disabled={flow.state === "opening" || flow.state === "linked"} onClick={sendToFlow}>
+                      {flow.state === "opening" || flow.state === "linked" ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} Send to UTubeFlow
+                    </button>
+                    {flow.text && <p className={`note ${flow.state === "error" ? "note-error" : flow.state === "done" ? "note-ok" : "note-info"}`} style={{ margin: 0 }}>{flow.text}</p>}
                   </div>
                 </div>
               )}

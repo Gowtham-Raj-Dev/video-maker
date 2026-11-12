@@ -26,12 +26,17 @@ export function pixelSize(project: Project, quality: Quality) {
 
 export const canEncodeMp4 = () => typeof VideoEncoder !== "undefined" && typeof VideoFrame !== "undefined";
 
-async function pickVideoCodec(width: number, height: number, bitrate: number, FPS: number): Promise<string | null> {
+type Accel = "no-preference" | "prefer-software";
+
+/** The encoder stopped taking frames: some hardware encoders stall on big frames. */
+class EncoderStall extends Error {}
+
+async function pickVideoCodec(width: number, height: number, bitrate: number, FPS: number, accel: Accel): Promise<string | null> {
   // High profile at the level the frame needs, then simpler profiles.
   const codecs = width * height > 2_100_000 ? ["avc1.640033", "avc1.640034", "avc1.4d0033"] : ["avc1.640028", "avc1.4d0028", "avc1.42002a", "avc1.42001f"];
   for (const codec of codecs) {
     try {
-      const { supported } = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: FPS });
+      const { supported } = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: FPS, hardwareAcceleration: accel });
       if (supported) return codec;
     } catch {
       // Not this one.
@@ -55,13 +60,24 @@ async function pickAudioCodec(): Promise<{ codec: string; mux: "aac" | "opus" } 
 
 /**
  * The video as an MP4, drawn and encoded frame by frame — faster than real
- * time and never dropping a frame, all inside this browser.
+ * time and never dropping a frame, all inside this browser. If the graphics
+ * card's encoder stalls, it starts again on the software encoder.
  */
 export async function exportMp4(project: Project, timeline: Timeline, options: ExportOptions, onProgress: (share: number) => void, signal?: AbortSignal): Promise<Exported> {
+  try {
+    return await encodeMp4(project, timeline, options, onProgress, "no-preference", signal);
+  } catch (error) {
+    if (!(error instanceof EncoderStall)) throw error;
+    onProgress(0);
+    return encodeMp4(project, timeline, options, onProgress, "prefer-software", signal);
+  }
+}
+
+async function encodeMp4(project: Project, timeline: Timeline, options: ExportOptions, onProgress: (share: number) => void, accel: Accel, signal?: AbortSignal): Promise<Exported> {
   const { quality, fps: FPS, assets } = options;
   const { width, height, k } = pixelSize(project, quality);
   const bitrate = Math.round(width * height * 30 * 0.11 * (FPS > 30 ? 1.4 : 1));
-  const videoCodec = await pickVideoCodec(width, height, bitrate, FPS);
+  const videoCodec = await pickVideoCodec(width, height, bitrate, FPS, accel);
   if (!videoCodec) throw new Error("This browser can't encode video at this size. Try a smaller quality, or Chrome / Edge.");
   const audioCodec = timeline.audio ? await pickAudioCodec() : null;
 
@@ -81,7 +97,15 @@ export async function exportMp4(project: Project, timeline: Timeline, options: E
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (e) => (failure = e),
   });
-  video.configure({ codec: videoCodec, width, height, bitrate, framerate: FPS });
+  video.configure({ codec: videoCodec, width, height, bitrate, framerate: FPS, hardwareAcceleration: accel });
+  const stalled = () => {
+    try {
+      video.close();
+    } catch {
+      // Already closed.
+    }
+    return new EncoderStall("The video encoder stopped responding.");
+  };
 
   const frames = Math.ceil(timeline.duration * FPS);
   for (let i = 0; i < frames; i++) {
@@ -96,13 +120,18 @@ export async function exportMp4(project: Project, timeline: Timeline, options: E
     video.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
     frame.close();
     // Don't draw faster than the encoder can take.
-    while (video.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
+    const since = performance.now();
+    while (video.encodeQueueSize > 6) {
+      await new Promise((r) => setTimeout(r, 4));
+      if (performance.now() - since > 8000) throw stalled();
+    }
     if (i % 5 === 0) {
       onProgress((i / frames) * 0.95);
       await new Promise((r) => setTimeout(r, 0));
     }
   }
-  await video.flush();
+  const flushed = await Promise.race([video.flush().then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 30_000))]);
+  if (!flushed) throw stalled();
   video.close();
 
   if (audioCodec && timeline.audio) {

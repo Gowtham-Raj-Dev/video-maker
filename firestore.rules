@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// Video Maker (videomaker.codelove.in). The site has no sign-in: anyone may add a feature request
+// and see how many there are, but nobody can read the requests themselves or change a count by more than one.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function feature(name) {
+      return name in ['own-character'];
+    }
+
+    // The public counter of a feature: stats/{feature} = { count }.
+    match /stats/{name} {
+      allow read: if feature(name);
+      allow create: if feature(name)
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == 1;
+      allow update: if feature(name)
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == resource.data.count + 1;
+    }
+
+    // One request per browser: requests/{feature}_{browserId} = { feature, lang, createdAt }.
+    // Create only — a second "I want this" from the same browser is an update and is refused,
+    // which also refuses the count bump sent with it. Read them in the Firebase console.
+    match /requests/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['feature', 'lang', 'createdAt'])
+        && feature(request.resource.data.feature)
+        && id.matches(request.resource.data.feature + '_[A-Za-z0-9-]{8,64}')
+        && request.resource.data.lang is string && request.resource.data.lang.size() <= 20
+        && request.resource.data.createdAt == request.time;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

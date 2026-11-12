@@ -45,8 +45,8 @@ export interface Look {
 export type CharacterStyle = "machan" | "rico";
 
 export const STYLES: Array<{ id: CharacterStyle; name: string; blurb: string }> = [
-  { id: "machan", name: "Machan style", blurb: "Round heads, big eyes, chunky and expressive — the Moolai Illa Machan look." },
-  { id: "rico", name: "Rico style", blurb: "Thin bodies, heavy eyelids, deadpan faces — quiet and dry." },
+  { id: "machan", name: "Classic", blurb: "Round faces and big eyes — bold and expressive." },
+  { id: "rico", name: "Slim", blurb: "Long limbs, sleepy eyelids, deadpan faces." },
 ];
 
 interface MachanCharacter {
@@ -120,6 +120,17 @@ const MACHAN_CHARACTERS: MachanCharacter[] = [
   { id: "chef", name: "Chef", blurb: "Everything needs more salt", voice: "Umbriel", look: { skin: "#B07650", shirt: "#FFFFFF", pants: "#343A40", hair: "short", hat: "chef", coat: "#FFFFFF", tie: "#E63946", mustache: true } },
   { id: "nurse", name: "Nurse", blurb: "Kind, quick, no nonsense", voice: "Erinome", look: { skin: "#C48D67", shirt: "#48CAE4", pants: "#C48D67", hair: "bun", skirt: "#48CAE4", lashes: true } },
   { id: "vicky", name: "Vicky", blurb: "Too cool, shades always on", voice: "Sadaltager", look: { skin: "#B98058", shirt: "#FFD60A", pants: "#212529", hair: "messy", hairColor: "#3A2618", shades: true } },
+  // More people around town.
+  { id: "rowdy", name: "Rowdy", blurb: "Scary face, scared of his mother", voice: "Algenib", look: { skin: "#8E5A3A", shirt: "#1B1B1E", pants: "#3D405B", hair: "messy", hairColor: "#111", beard: true, mustache: true } },
+  { id: "politician", name: "Thalaivar", blurb: "Promises everything, does nothing", voice: "Rasalgethi", look: { skin: "#A86B45", shirt: "#FFFFFF", pants: "#FFFFFF", hair: "bald", hairColor: "#2B2B2B", mustache: true, glasses: true } },
+  { id: "techie", name: "Techie", blurb: "Works from home, sleeps at work", voice: "Iapetus", look: { skin: "#B47A52", shirt: "#6C757D", pants: "#22223B", hair: "short", glasses: true, beard: true } },
+  { id: "postman", name: "Postman", blurb: "Knows every house, every secret", voice: "Charon", look: { skin: "#9C6440", shirt: "#C9A66B", pants: "#8C7851", hair: "short", hat: "cap", hatColor: "#8C7851", uniform: true, mustache: true } },
+  { id: "watchman", name: "Watchman", blurb: "Awake only when you're late", voice: "Orus", look: { skin: "#8A5A3C", shirt: "#1D3557", pants: "#1D3557", hair: "short", hat: "police", hatColor: "#14213D", uniform: true, mustache: true } },
+  { id: "farmer", name: "Vivasayi", blurb: "Up at five, wiser than all of us", voice: "Algenib", look: { skin: "#8E5A3A", shirt: "#F1EFE6", pants: "#2D6A4F", hair: "short", hairColor: "#555", mustache: true } },
+  { id: "cricketer", name: "Cricketer", blurb: "Every argument ends in a match", voice: "Puck", look: { skin: "#B07650", shirt: "#F8F9FA", pants: "#F8F9FA", hair: "short", hat: "cap", hatColor: "#1D4ED8" } },
+  { id: "gymbro", name: "Gym Bro", blurb: "Has skipped leg day since 2019", voice: "Fenrir", look: { skin: "#A7704A", shirt: "#E63946", pants: "#212529", hair: "spiky" } },
+  { id: "kamala", name: "Kamala Aunty", blurb: "The neighbour who hears everything", voice: "Pulcherrima", look: { skin: "#C08A62", shirt: "#E9C46A", pants: "#000", hair: "bun", saree: "#E76F51", bindi: true, earrings: true, lashes: true } },
+  { id: "swathi", name: "Swathi", blurb: "Influencer, 12 followers", voice: "Zephyr", look: { skin: "#D19A6E", shirt: "#B5179E", pants: "#264653", hair: "long", hairColor: "#4A2C2A", shades: true, lashes: true, earrings: true } },
 ];
 
 export const CHARACTERS: Character[] = [

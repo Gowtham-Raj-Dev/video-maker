@@ -1,6 +1,8 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { FeatureVote } from "@/components/FeatureVote";
 import { Figure } from "@/components/Figure";
+import { GOAL } from "@/lib/requests";
 import { HeroProduct } from "@/components/HeroProduct";
 import { Logo } from "@/components/Logo";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -46,6 +48,7 @@ export default function Home() {
           </Link>
           <nav className="nav-links" aria-label="Sections">
             <a href="#cast">Cast</a>
+            <a href="#utubeflow">UTubeFlow</a>
             <a href="#languages">Languages</a>
             <a href="#how">How it works</a>
             <a href="#faq">FAQ</a>
@@ -89,7 +92,7 @@ export default function Home() {
             <div className="section-head">
               <h2 className="section-title">Meet the cast.</h2>
               <p className="section-sub">
-                {CHARACTERS.length} characters in two drawing styles, each with a voice of their own (from {VOICES.length}). Write any name in your script and someone steps in — recast them any time.
+                {CHARACTERS.length} characters in two drawing styles, each with a voice of their own (from {VOICES.length}). Write any name in your script and someone steps in — recast them any time. New faces are added regularly.
               </p>
             </div>
             {STYLES.map((style) => (
@@ -109,6 +112,41 @@ export default function Home() {
                 </div>
               </div>
             ))}
+            <div className="own-card">
+              <span className="own-badge">Coming soon</span>
+              <div>
+                <h3>Create your own character</h3>
+                <p>Pick the face, skin tone, hair, outfit and colours — or start from your own photo — and give them any voice. Your character, in every video you make. When {GOAL} people tap “I want this”, we build it.</p>
+              </div>
+              <FeatureVote feature="own-character" />
+            </div>
+          </div>
+        </section>
+
+        <section id="utubeflow" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">Made here. Scheduled on YouTube.</h2>
+              <p className="section-sub">Video Maker works with <a href="https://utubeflow.codelove.in" target="_blank" rel="noopener noreferrer">UTubeFlow</a>, our free YouTube uploader and scheduler. Send a finished video straight to it — no downloading, no re-uploading.</p>
+            </div>
+            <ol className="steps">
+              {[
+                ["Make the video", "Write, cast and export your MP4 in the editor."],
+                ["Send to UTubeFlow", "One button opens UTubeFlow and hands it the video with its title and description."],
+                ["Sign in once", "Connect your YouTube channel in UTubeFlow with Google."],
+                ["Schedule", "Pick a time — or one a day — and UTubeFlow posts it for you."],
+              ].map(([title, text], i) => (
+                <li key={title}>
+                  <span className="step-n">0{i + 1}</span>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="hero-cta" style={{ justifyContent: "flex-start" }}>
+              <Link href="/editor/" className="btn btn-primary btn-lg">Make a video <ArrowRight size={17} /></Link>
+              <a href="https://utubeflow.codelove.in" target="_blank" rel="noopener noreferrer" className="btn btn-lg">Open UTubeFlow</a>
+            </div>
           </div>
         </section>
 
