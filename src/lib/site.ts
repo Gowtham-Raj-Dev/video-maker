@@ -5,7 +5,7 @@ export const SITE = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://videomaker.codelove.in",
   title: "Video Maker — Free AI Cartoon Videos with Lip Sync (Tamil, Hindi, Telugu, English)",
   description:
-    "Free cartoon video maker: type a dialogue, pick from 13 characters, and get a talking cartoon video with lip sync, voices and subtitles in Tamil, Tanglish, Telugu, Hindi and English. Runs in your browser with your own free Gemini API key — no sign-up, no watermark.",
+    "Free cartoon video maker: type a dialogue, pick from 24 characters, and get a talking cartoon video with lip sync, voices and subtitles in Tamil, Tanglish, Telugu, Hindi and English. Runs in your browser with your own free Gemini API key — no sign-up, no watermark.",
   creator: "Gowtham",
   creatorUrl: "https://gowtham.codelove.in",
   brand: "CodeLove",

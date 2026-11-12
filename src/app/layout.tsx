@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { FAQ, SITE } from "@/lib/site";
 
-export const viewport: Viewport = { themeColor: "#FFD166", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#F6F4EF", width: "device-width", initialScale: 1 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
@@ -45,7 +45,7 @@ const jsonLd = {
       operatingSystem: "Any (web browser)",
       offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
       creator: { "@id": "https://gowtham.codelove.in/#person" },
-      featureList: ["13 cartoon characters", "Lip sync from the voice", "Tamil, Tanglish, Telugu, Hindi, Hinglish, English", "Word-by-word subtitles", "16 backgrounds", "MP4 export up to 4K", "AI script writer"],
+      featureList: ["24 cartoon characters", "Lip sync from the voice", "Tamil, Tanglish, Telugu, Hindi, Hinglish, English", "Word-by-word subtitles", "16 backgrounds", "MP4 export up to 4K", "AI script writer"],
     },
     {
       "@type": "FAQPage",
@@ -63,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Baloo+Tammudu+2:wght@700;800&family=Baloo+Thambi+2:wght@700;800&family=Nunito:wght@500;600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Baloo+Tammudu+2:wght@700;800&family=Baloo+Thambi+2:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
         />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </head>

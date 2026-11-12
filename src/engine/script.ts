@@ -176,5 +176,12 @@ export function defaultProject(language: LanguageId = "tanglish"): Project {
     sfx: true,
     punch: true,
     voiceMode: "batch",
+    highlight: "#FFD166",
+    upper: false,
+    camera: "calm",
+    charScale: 1,
+    lineGap: 0.22,
+    progressBar: false,
+    endCard: "",
   };
 }

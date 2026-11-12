@@ -154,10 +154,25 @@ export async function speak(key: string, turns: Turn[], voices: Record<string, s
   if (!inline) throw new GeminiError(500, "Gemini returned no voice for this line. Try again, or reword it.");
   const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
   const view = new DataView(bytes.buffer);
-  const wav = bytes.length > 44 && String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF";
+  const tag = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  const wav = bytes.length > 44 && tag(0) === "RIFF";
   const rate = Number(/rate=(\d+)/.exec(inline.mimeType)?.[1] ?? (wav ? view.getUint32(24, true) : 24_000));
-  const from = wav ? 44 : 0;
-  const samples = new Float32Array(Math.floor((bytes.length - from) / 2));
+  // A WAV's sound starts after its "data" chunk header, which other chunks may come before.
+  let from = 0;
+  let end = bytes.length;
+  if (wav) {
+    from = 44;
+    for (let at = 12; at + 8 <= bytes.length; ) {
+      const size = view.getUint32(at + 4, true);
+      if (tag(at) === "data") {
+        from = at + 8;
+        end = Math.min(bytes.length, from + size);
+        break;
+      }
+      at += 8 + size + (size & 1);
+    }
+  }
+  const samples = new Float32Array(Math.floor((end - from) / 2));
   for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(from + i * 2, true) / 32768;
   return { samples, rate };
 }

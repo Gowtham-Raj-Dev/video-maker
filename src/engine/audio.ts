@@ -302,12 +302,13 @@ function resampleInto(out: Float32Array, at: number, samples: Float32Array, rate
 }
 
 /** Every line placed in time, its mouth worked out, and the sound mixed. `voices` null makes a silent preview. */
-export function buildTimeline(lines: Line[], project: Project, voices: Array<{ samples: Float32Array; rate: number }> | null): Timeline {
+export function buildTimeline(lines: Line[], project: Project, voices: Array<{ samples: Float32Array; rate: number }> | null, ownMusic: Float32Array | null = null): Timeline {
   const spans: Span[] = [];
   let cursor = LEAD_IN;
+  const gap = project.lineGap ?? GAP;
   lines.forEach((line, i) => {
     const last = i === lines.length - 1;
-    if (i) cursor += last && project.punch && lines.length > 2 ? PUNCH_PAUSE : GAP;
+    if (i) cursor += last && project.punch && lines.length > 2 ? Math.max(PUNCH_PAUSE, gap) : gap;
     const voice = voices?.[i];
     const seconds = voice ? voice.samples.length / voice.rate : Math.max(1.1, line.text.length * 0.065);
     const mouth = voice ? mouthOf(voice.samples, voice.rate) : fakeMouth(seconds, i * 1.7);
@@ -318,7 +319,14 @@ export function buildTimeline(lines: Line[], project: Project, voices: Array<{ s
   if (!voices) return { spans, duration, audio: null, silent: true };
 
   const audio = new Float32Array(Math.ceil(duration * MIX_RATE));
-  if (project.music !== "none") {
+  if (project.music === "custom") {
+    // The visitor's own track, looped under the whole video and faded at both ends.
+    if (ownMusic?.length) {
+      const gain = 0.3 * project.musicVolume;
+      const fade = MIX_RATE * 0.8;
+      for (let i = 0; i < audio.length; i++) audio[i] += ownMusic[i % ownMusic.length] * gain * Math.min(1, i / fade, (audio.length - i) / fade);
+    }
+  } else if (project.music !== "none") {
     const music = makeMusic(project.music, duration);
     const gain = 0.22 * project.musicVolume;
     for (let i = 0; i < audio.length; i++) audio[i] += music[i] * gain;

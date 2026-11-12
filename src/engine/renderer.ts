@@ -1,7 +1,7 @@
 import { backgroundById } from "./backgrounds";
 import { characterById, drawCharacter } from "./characters";
 import { FONT, INK, blob, clamp01, easeOutBack, label, type Ctx } from "./draw";
-import { ENVELOPE_RATE, type Arm, type CastMember, type Format, type Line, type Mood, type Project, type Span, type Timeline } from "./types";
+import { ENVELOPE_RATE, type Arm, type Assets, type CastMember, type Format, type Line, type Mood, type Project, type Span, type Timeline } from "./types";
 
 interface Layout {
   W: number;
@@ -103,7 +103,7 @@ function stagingOf(timeline: Timeline, spread: number): Seat[][] {
 const sample = (values: Float32Array, seconds: number) => values[Math.max(0, Math.min(values.length - 1, Math.round(seconds * ENVELOPE_RATE)))] ?? 0;
 
 /** One frame of the video at time `t`, on a context already scaled to the frame's W × H. */
-export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: number) {
+export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: number, assets: Assets | null = null) {
   const L = LAYOUTS[project.format];
   const { W, H, floor } = L;
   const spans = timeline.spans;
@@ -112,7 +112,7 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
   ctx.rect(0, 0, W, H);
   ctx.clip();
   if (!spans.length) {
-    backgroundById(project.background).draw(ctx, { W, H, floor, u: L.cs / 0.72, t });
+    drawBackground(ctx, project.background, { W, H, floor, u: L.cs / 0.72, t }, assets);
     ctx.restore();
     return;
   }
@@ -128,7 +128,7 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
   const staging = stagingOf(timeline, L.spread);
   const seats = staging[cur];
   const crowd = seats.length >= 3 ? 0.86 : 1;
-  const cs = L.cs * crowd;
+  const cs = L.cs * crowd * (project.charScale ?? 1);
   const u = L.cs / 0.72;
 
   let bg = project.background;
@@ -136,12 +136,23 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
 
   // The camera: a slow breath, and a push in on the punch line.
   const kick = punch && t >= spans[lastIndex].start ? Math.exp(-(t - spans[lastIndex].start) * 2.2) : 0;
-  const zoom = 1 + 0.012 * Math.sin(t * 0.7) + 0.07 * kick;
+  const camera = project.camera ?? "calm";
+  let zoom = camera === "still" ? 1 : 1 + 0.012 * Math.sin(t * 0.7) + 0.07 * kick;
+  let focusX = W / 2;
+  if (camera === "dynamic" && seats.length > 1) {
+    // Leans towards whoever is speaking, gliding over as the turn changes.
+    const xOf = (i: number) => (staging[i].find((s) => s.name === spans[i].line.speaker)?.x ?? 0.5) * W;
+    const k = clamp01((t - (span.start - 0.2)) / 0.45);
+    const glide = k * k * (3 - 2 * k);
+    const from = cur > 0 ? xOf(cur - 1) : W / 2;
+    focusX = W / 2 + (from + (xOf(cur) - from) * glide - W / 2) * 0.55;
+    zoom += 0.14;
+  }
   ctx.save();
   ctx.translate(W / 2, floor - 320 * u);
   ctx.scale(zoom, zoom);
-  ctx.translate(-W / 2, -(floor - 320 * u));
-  backgroundById(bg).draw(ctx, { W, H, floor, u, t });
+  ctx.translate(-focusX, -(floor - 320 * u));
+  drawBackground(ctx, bg, { W, H, floor, u, t }, assets);
 
   const speakerSeat = seats.find((s) => s.name === span.line.speaker);
   const speakerMood = moodOf(span.line, punch && cur === lastIndex);
@@ -213,7 +224,24 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
     }
   }
 
-  if (project.subtitleStyle !== "off") drawSubtitle(ctx, L, project, spans, cur, t);
+  const endAt = spans[lastIndex].end + 0.7;
+  const ending = Boolean(project.endCard?.trim()) && t > endAt;
+  if (project.subtitleStyle !== "off" && !ending) drawSubtitle(ctx, L, project, spans, cur, t);
+  if (ending) {
+    const pop = easeOutBack((t - endAt) / 0.3);
+    ctx.save();
+    ctx.translate(W / 2, L.subY[project.subtitlePosition]);
+    ctx.scale(pop, pop);
+    ctx.translate(-W / 2, -L.subY[project.subtitlePosition]);
+    drawTitle(ctx, { ...L, titleY: L.subY[project.subtitlePosition], titleSize: L.subSize * 0.95 }, project.endCard.trim(), project.highlight ?? "#FFD166");
+    ctx.restore();
+  }
+  if (project.progressBar) {
+    ctx.fillStyle = "rgba(30,27,46,0.35)";
+    ctx.fillRect(0, H - 12 * u, W, 12 * u);
+    ctx.fillStyle = project.highlight ?? "#FFD166";
+    ctx.fillRect(0, H - 12 * u, W * clamp01(t / timeline.duration), 12 * u);
+  }
   if (project.title.trim()) drawTitle(ctx, L, project.title.trim());
   if (project.handle.trim()) {
     ctx.save();
@@ -231,7 +259,19 @@ function nameTag(ctx: Ctx, name: string, x: number, y: number, size: number, act
   label(ctx, name, x, y + size * 0.04, size, INK);
 }
 
-function drawTitle(ctx: Ctx, L: Layout, title: string) {
+function drawBackground(ctx: Ctx, id: string, stage: { W: number; H: number; floor: number; u: number; t: number }, assets: Assets | null) {
+  if (id === "custom" && assets?.bgImage) {
+    // The visitor's own picture, filling the frame (and a margin, for when the camera moves).
+    const [iw, ih] = assets.bgSize;
+    const m = 0.14;
+    const k = Math.max((stage.W * (1 + m * 2)) / iw, (stage.H * (1 + m * 2)) / ih);
+    ctx.drawImage(assets.bgImage, stage.W / 2 - (iw * k) / 2, stage.H / 2 - (ih * k) / 2, iw * k, ih * k);
+    return;
+  }
+  backgroundById(id === "custom" ? "room" : id).draw(ctx, stage);
+}
+
+function drawTitle(ctx: Ctx, L: Layout, title: string, fill = "#FFD166") {
   let size = L.titleSize;
   const max = L.W * 0.9 - size * 1.6;
   ctx.font = `800 ${size}px ${FONT}`;
@@ -246,7 +286,7 @@ function drawTitle(ctx: Ctx, L: Layout, title: string) {
   const x = L.W / 2 - bw / 2;
   const y = L.titleY - bh / 2;
   blob(ctx, INK, () => ctx.roundRect(x + 6, y + 8, bw, bh, bh / 2), 0);
-  blob(ctx, "#FFD166", () => ctx.roundRect(x, y, bw, bh, bh / 2), 7);
+  blob(ctx, fill, () => ctx.roundRect(x, y, bw, bh, bh / 2), 7);
   ctx.save();
   ctx.beginPath();
   ctx.rect(x + size * 0.5, y, bw - size, bh);
@@ -280,7 +320,8 @@ function wrap(ctx: Ctx, words: string[], size: number, max: number): Array<{ wor
 
 function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur: number, t: number) {
   const span = spans[cur];
-  const words = span.line.caption.split(/\s+/).filter(Boolean);
+  const words = (project.upper ? span.line.caption.toUpperCase() : span.line.caption).split(/\s+/).filter(Boolean);
+  const hot = project.highlight ?? "#FFD166";
   if (!words.length || t < span.start - 0.15) return;
   const style = project.subtitleStyle;
   const max = L.W * 0.86;
@@ -337,10 +378,9 @@ function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur:
       const spoken = word.index < active;
       let fill = "#FFFFFF";
       let alpha = 1;
-      if (style === "pop" && isActive) fill = "#FFD166";
-      if (style === "box" && isActive) fill = "#80ED99";
+      if ((style === "pop" || style === "box") && isActive) fill = hot;
       if (style === "karaoke") {
-        fill = spoken || isActive ? "#FFD166" : "#FFFFFF";
+        fill = spoken || isActive ? hot : "#FFFFFF";
         alpha = spoken || isActive ? 1 : 0.6;
       }
       ctx.save();

@@ -14,8 +14,8 @@ export interface Look {
   legs: string;
   shoes: string;
   hair: string;
-  style: "pony" | "bun" | "short" | "bob" | "pigtails" | "spiky" | "curly" | "bald";
-  outfit: "dress" | "shirt" | "kurta" | "coat" | "saree";
+  style: "pony" | "bun" | "short" | "bob" | "pigtails" | "spiky" | "curly" | "bald" | "long" | "braid";
+  outfit: "dress" | "shirt" | "kurta" | "coat" | "saree" | "uniform" | "apron";
   /** A second colour: the saree's drape, the tie, the cap. */
   accent?: string;
   lashes?: boolean;
@@ -24,7 +24,11 @@ export interface Look {
   moustache?: boolean;
   beard?: boolean;
   bindi?: boolean;
-  cap?: boolean;
+  hat?: "cap" | "police" | "chef";
+  shades?: boolean;
+  earrings?: boolean;
+  /** Smaller than a grown-up: children. */
+  size?: number;
 }
 
 export interface Character {
@@ -55,7 +59,7 @@ export const CHARACTERS: Character[] = [
   { id: "riya", name: "Riya", blurb: "Glasses, too smart for her own good", voice: "Autonoe", look: { skin: "#D9A679", lid: "#8ECAE6", top: "#F4A261", legs: "#D9A679", shoes: "#264653", hair: "#2B2D42", style: "bob", outfit: "dress", lashes: true, glasses: true } },
   { id: "tara", name: "Tara", blurb: "Pure chaos in pigtails", voice: "Laomedeia", look: { skin: "#F0D2B6", lid: "#FFAFCC", top: "#9D4EDD", legs: "#F0D2B6", shoes: "#3D405B", hair: "#9C4A1A", style: "pigtails", outfit: "dress", lashes: true, freckles: true } },
   { id: "arjun", name: "Arjun", blurb: "The friend with big ideas", voice: "Puck", look: { skin: "#D9A679", lid: "#B7B7A4", top: "#E63946", legs: "#3D5A80", shoes: "#F1FAEE", hair: "#22223B", style: "spiky", outfit: "shirt" } },
-  { id: "karthik", name: "Karthik", blurb: "Cap on, brain off", voice: "Fenrir", look: { skin: "#C68E5E", lid: "#A8DADC", top: "#2A9D8F", legs: "#33415C", shoes: "#E9C46A", hair: "#1B1B1E", style: "short", outfit: "shirt", cap: true, accent: "#E76F51" } },
+  { id: "karthik", name: "Karthik", blurb: "Cap on, brain off", voice: "Fenrir", look: { skin: "#C68E5E", lid: "#A8DADC", top: "#2A9D8F", legs: "#33415C", shoes: "#E9C46A", hair: "#1B1B1E", style: "short", outfit: "shirt", hat: "cap", accent: "#E76F51" } },
   { id: "babu", name: "Babu", blurb: "Curly hair, zero worries", voice: "Achird", look: { skin: "#B97A4E", lid: "#DDB892", top: "#FFB703", legs: "#5F4B3A", shoes: "#3D405B", hair: "#2B1D14", style: "curly", outfit: "shirt" } },
   { id: "amma", name: "Amma", blurb: "Mom: sees everything", voice: "Kore", look: { skin: "#D9B08C", lid: "#C9A27E", top: "#B5838D", legs: "#D9B08C", shoes: "#3D405B", hair: "#3D2C2E", style: "bun", outfit: "saree", accent: "#E9C46A", lashes: true, bindi: true } },
   { id: "appa", name: "Appa", blurb: "Dad: one look is enough", voice: "Charon", look: { skin: "#C68E5E", lid: "#B08968", top: "#F1FAEE", legs: "#495057", shoes: "#2B2D42", hair: "#22223B", style: "short", outfit: "shirt", moustache: true } },
@@ -64,6 +68,17 @@ export const CHARACTERS: Character[] = [
   { id: "teacher", name: "Miss Rose", blurb: "The teacher who has heard it all", voice: "Sulafat", look: { skin: "#E0B990", lid: "#F28482", top: "#457B9D", legs: "#E0B990", shoes: "#1D3557", hair: "#5C3D2E", style: "short", outfit: "dress", lashes: true, glasses: true } },
   { id: "boss", name: "Boss", blurb: "Meetings, deadlines, sighs", voice: "Orus", look: { skin: "#D2A07A", lid: "#ADB5BD", top: "#343A40", legs: "#343A40", shoes: "#0B090A", hair: "#3A2E2A", style: "short", outfit: "coat", accent: "#E63946", beard: true } },
   { id: "doctor", name: "Doctor", blurb: "Calm, kind, slightly tired", voice: "Callirrhoe", look: { skin: "#E3BC9A", lid: "#BDE0FE", top: "#FFFFFF", legs: "#5C677D", shoes: "#3D405B", hair: "#40263A", style: "bob", outfit: "coat", accent: "#2A9D8F", lashes: true } },
+  { id: "divya", name: "Divya", blurb: "Long hair, sharp comebacks", voice: "Aoede", look: { skin: "#E6BE9A", lid: "#F7B2BD", top: "#EF476F", legs: "#E6BE9A", shoes: "#2B2D42", hair: "#2A1A1F", style: "long", outfit: "dress", lashes: true, earrings: true } },
+  { id: "priya", name: "Priya", blurb: "College topper with a braid", voice: "Zephyr", look: { skin: "#CFA07A", lid: "#B8E0D2", top: "#118AB2", legs: "#CFA07A", shoes: "#3D405B", hair: "#1F1A17", style: "braid", outfit: "dress", lashes: true, bindi: true } },
+  { id: "vicky", name: "Vicky", blurb: "Too cool, shades always on", voice: "Sadachbia", look: { skin: "#D9A679", lid: "#ADB5BD", top: "#212529", legs: "#1D3557", shoes: "#F8F9FA", hair: "#3A2618", style: "spiky", outfit: "shirt", shades: true } },
+  { id: "surya", name: "Surya", blurb: "The hero of every story", voice: "Iapetus", look: { skin: "#C8936A", lid: "#B5A08A", top: "#6A4C93", legs: "#22223B", shoes: "#6B4F3A", hair: "#16130F", style: "short", outfit: "shirt", beard: true } },
+  { id: "mama", name: "Mama", blurb: "Uncle with advice for everything", voice: "Alnilam", look: { skin: "#BF8A5E", lid: "#C9A27E", top: "#E9D8A6", legs: "#F8EDEB", shoes: "#6B4F3A", hair: "#2B2B2B", style: "bald", outfit: "kurta", moustache: true } },
+  { id: "athai", name: "Athai", blurb: "Aunty who knows all the news", voice: "Despina", look: { skin: "#DDB08A", lid: "#D8B4E2", top: "#7B2CBF", legs: "#DDB08A", shoes: "#3D405B", hair: "#2D1E2F", style: "bun", outfit: "saree", accent: "#F9C74F", lashes: true, glasses: true, earrings: true, bindi: true } },
+  { id: "police", name: "Inspector", blurb: "Stern voice, soft heart", voice: "Rasalgethi", look: { skin: "#C68E5E", lid: "#B08968", top: "#C2A878", legs: "#8C7851", shoes: "#2B2118", hair: "#1B1B1E", style: "short", outfit: "uniform", hat: "police", accent: "#6B5B3E", moustache: true } },
+  { id: "chef", name: "Chef", blurb: "Everything needs more salt", voice: "Umbriel", look: { skin: "#E0B990", lid: "#F6BD60", top: "#FFFFFF", legs: "#343A40", shoes: "#212529", hair: "#4A3628", style: "short", outfit: "coat", hat: "chef", accent: "#E63946", moustache: true } },
+  { id: "annachi", name: "Annachi", blurb: "The shopkeeper who never gives change", voice: "Zubenelgenubi", look: { skin: "#B97A4E", lid: "#C9A27E", top: "#90BE6D", legs: "#F8F9FA", shoes: "#6B4F3A", hair: "#22201E", style: "curly", outfit: "kurta", moustache: true } },
+  { id: "nurse", name: "Nurse", blurb: "Kind, quick, no nonsense", voice: "Erinome", look: { skin: "#E8C9A8", lid: "#BDE0FE", top: "#F1FAEE", legs: "#E8C9A8", shoes: "#F8F9FA", hair: "#3D2C2E", style: "bun", outfit: "apron", accent: "#48CAE4", lashes: true } },
+  { id: "chintu", name: "Chintu", blurb: "Small boy, big questions", voice: "Puck", look: { skin: "#E0B088", lid: "#FFD6A5", top: "#FB8500", legs: "#023047", shoes: "#D62828", hair: "#1F1A17", style: "short", outfit: "shirt", freckles: true, size: 0.76 } },
 ];
 
 export const characterById = (id: string) => CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
@@ -102,9 +117,10 @@ function armPose(arm: Arm, t: number, front: boolean): [Pt, Pt] {
 /** A person standing at `x` with their feet on `y`; about 1000 units tall at scale 1. */
 export function drawCharacter(ctx: Ctx, x: number, y: number, look: Look, pose: Pose) {
   const { t, talk = 0, mood = "normal", face = 1, arm = "down" } = pose;
-  const scale = pose.scale ?? 1;
+  const scale = (pose.scale ?? 1) * (look.size ?? 1);
   const bob = talk > 0.05 ? -talk * 6 : Math.sin(t * 2.2 + x) * 3;
-  const pants = look.outfit !== "dress" && look.outfit !== "saree";
+  const skirt = look.outfit === "dress" || look.outfit === "saree" || look.outfit === "apron";
+  const pants = !skirt;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
@@ -125,7 +141,7 @@ export function drawCharacter(ctx: Ctx, x: number, y: number, look: Look, pose: 
   ctx.translate(0, bob);
 
   // The body.
-  if (look.outfit === "dress" || look.outfit === "saree") {
+  if (skirt) {
     blob(ctx, look.top, () => {
       ctx.moveTo(-58, -630);
       ctx.lineTo(58, -630);
@@ -141,6 +157,17 @@ export function drawCharacter(ctx: Ctx, x: number, y: number, look: Look, pose: 
         ctx.lineTo(102, -330);
         ctx.lineTo(108, -290);
         ctx.lineTo(52, -290);
+        ctx.closePath();
+      }, 6);
+    }
+    if (look.outfit === "apron") {
+      // A bib and a band at the waist.
+      blob(ctx, look.accent ?? "#48CAE4", () => ctx.roundRect(-34, -610, 68, 120, 10), 6);
+      blob(ctx, look.accent ?? "#48CAE4", () => {
+        ctx.moveTo(-76, -500);
+        ctx.lineTo(76, -500);
+        ctx.lineTo(82, -462);
+        ctx.lineTo(-82, -462);
         ctx.closePath();
       }, 6);
     }
@@ -173,6 +200,14 @@ export function drawCharacter(ctx: Ctx, x: number, y: number, look: Look, pose: 
         ctx.lineTo(-12, -560);
         ctx.closePath();
       }, 5);
+    } else if (look.outfit === "uniform") {
+      // A belt, a pocket and a badge.
+      blob(ctx, look.accent ?? "#6B5B3E", () => ctx.rect(-68, hem - 34, 136, 30), 6);
+      blob(ctx, "#F9C74F", () => ctx.rect(-10, hem - 36, 26, 34), 5);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 5;
+      ctx.strokeRect(14, -580, 36, 40);
+      blob(ctx, "#F9C74F", () => circle(ctx, -30, -560, 13), 5);
     } else if (look.outfit === "shirt") {
       ctx.strokeStyle = "rgba(30,27,46,0.35)";
       ctx.lineWidth = 5;
@@ -212,6 +247,15 @@ function drawHead(ctx: Ctx, look: Look, mood: Mood, talk: number, shape: number,
   }
   if (look.style === "bun") blob(ctx, look.hair, () => circle(ctx, hx - 60, hy - 150, 60), LINE);
   if (look.style === "bob") blob(ctx, look.hair, () => ctx.roundRect(hx - 178, hy - 130, 356, 230, [150, 150, 40, 40]), LINE);
+  if (look.style === "long") blob(ctx, look.hair, () => ctx.roundRect(hx - 176, hy - 130, 330, 470, [150, 150, 60, 60]), LINE);
+  if (look.style === "braid") {
+    // Knots down the back, swinging a little.
+    for (let k = 4; k >= 0; k--) {
+      const sway = Math.sin(t * 2.4 + k * 0.5) * k * 2.5;
+      blob(ctx, look.hair, () => ellipse(ctx, hx - 150 - k * 8 + sway, hy + 60 + k * 82, 44 - k * 4, 50), LINE);
+    }
+    blob(ctx, "#F28482", () => circle(ctx, hx - 182 + Math.sin(t * 2.4 + 2) * 10, hy + 430, 16), 6);
+  }
   if (look.style === "pigtails") {
     for (const side of [-1, 1]) {
       const swing = Math.sin(t * 4 + side) * 0.08;
@@ -275,7 +319,24 @@ function drawHead(ctx: Ctx, look: Look, mood: Mood, talk: number, shape: number,
       ctx.closePath();
     }, LINE);
   }
-  if (look.cap) {
+  if (look.hat === "police") {
+    const cloth = look.accent ?? "#6B5B3E";
+    blob(ctx, cloth, () => {
+      ctx.moveTo(hx - 170, hy - 96);
+      ctx.quadraticCurveTo(hx - 190, hy - 250, hx + 10, hy - 250);
+      ctx.quadraticCurveTo(hx + 200, hy - 250, hx + 176, hy - 96);
+      ctx.closePath();
+    }, LINE);
+    blob(ctx, INK, () => ctx.roundRect(hx - 150, hy - 118, 400, 34, 17), 0);
+    blob(ctx, "#F9C74F", () => circle(ctx, hx + 40, hy - 176, 26), 6);
+  }
+  if (look.hat === "chef") {
+    for (const [dx, r] of [[-80, 62], [0, 78], [86, 62]]) blob(ctx, "#FFFFFF", () => circle(ctx, hx + dx, hy - 250, r), LINE);
+    blob(ctx, "#FFFFFF", () => ctx.roundRect(hx - 124, hy - 236, 252, 124, 12), LINE);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(hx - 112, hy - 262, 228, 60);
+  }
+  if (look.hat === "cap") {
     const cap = look.accent ?? "#E76F51";
     blob(ctx, cap, () => {
       ctx.arc(hx, hy, 158, Math.PI * 1.02, Math.PI * 1.9);
@@ -350,6 +411,26 @@ function drawHead(ctx: Ctx, look: Look, mood: Mood, talk: number, shape: number,
     ctx.lineTo(hx - 140, hy - 24);
     ctx.stroke();
   }
+  if (look.shades) {
+    for (const ex of [fx - 52, fx + 56]) blob(ctx, "#15131F", () => ctx.roundRect(ex - 62, hy - 58, 124, 92, [18, 18, 44, 44]), 6);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(fx - 52 + 60, hy - 30);
+    ctx.lineTo(fx + 56 - 60, hy - 30);
+    ctx.moveTo(fx - 52 - 60, hy - 30);
+    ctx.lineTo(hx - 140, hy - 30);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 6;
+    for (const ex of [fx - 52, fx + 56]) {
+      ctx.beginPath();
+      ctx.moveTo(ex - 36, hy - 34);
+      ctx.lineTo(ex - 14, hy - 44);
+      ctx.stroke();
+    }
+  }
+  if (look.earrings) blob(ctx, "#F9C74F", () => circle(ctx, hx - 134, hy + 62, 13), 5);
   if (look.freckles) {
     ctx.fillStyle = "rgba(160,90,60,0.7)";
     for (const [dx, dy] of [[-70, 70], [-52, 82], [-86, 86], [96, 70], [114, 82], [80, 86]]) {

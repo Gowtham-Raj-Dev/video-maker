@@ -3,7 +3,16 @@ export type Arm = "down" | "hold" | "point" | "up" | "facepalm" | "clasp";
 export type Format = "9:16" | "16:9" | "1:1";
 export type SubtitleStyle = "pop" | "box" | "karaoke" | "clean" | "off";
 export type SubtitlePosition = "top" | "middle" | "bottom";
-export type MusicId = "none" | "funny" | "chill" | "suspense";
+export type MusicId = "none" | "funny" | "chill" | "suspense" | "custom";
+export type CameraStyle = "still" | "calm" | "dynamic";
+
+/** Things the visitor brought that don't fit in a saved project: they last until the page is closed. */
+export interface Assets {
+  bgImage: CanvasImageSource | null;
+  bgSize: [number, number];
+  /** Mono, at MIX_RATE. */
+  music: Float32Array | null;
+}
 export type LanguageId = "tamil" | "tanglish" | "english" | "telugu" | "hindi" | "hinglish";
 
 /** One spoken line of the script. */
@@ -44,6 +53,17 @@ export interface Project {
   punch: boolean;
   /** "batch": few requests, cut back into lines; "line": one request a line. */
   voiceMode: "batch" | "line";
+  /** The colour of the word being spoken. */
+  highlight: string;
+  upper: boolean;
+  camera: CameraStyle;
+  /** The people's size, 1 as designed. */
+  charScale: number;
+  /** Seconds of quiet between lines. */
+  lineGap: number;
+  progressBar: boolean;
+  /** Words shown after the last line, empty for none. */
+  endCard: string;
 }
 
 /** A line placed in time, with its mouth movement. */

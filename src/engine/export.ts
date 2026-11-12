@@ -1,6 +1,12 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import { drawFrame, frameSize } from "./renderer";
-import { FPS, MIX_RATE, type Project, type Timeline } from "./types";
+import { MIX_RATE, type Assets, type Project, type Timeline } from "./types";
+
+export interface ExportOptions {
+  quality: Quality;
+  fps: number;
+  assets: Assets | null;
+}
 
 export type Quality = 720 | 1080 | 1440 | 2160;
 
@@ -20,7 +26,7 @@ export function pixelSize(project: Project, quality: Quality) {
 
 export const canEncodeMp4 = () => typeof VideoEncoder !== "undefined" && typeof VideoFrame !== "undefined";
 
-async function pickVideoCodec(width: number, height: number, bitrate: number): Promise<string | null> {
+async function pickVideoCodec(width: number, height: number, bitrate: number, FPS: number): Promise<string | null> {
   // High profile at the level the frame needs, then simpler profiles.
   const codecs = width * height > 2_100_000 ? ["avc1.640033", "avc1.640034", "avc1.4d0033"] : ["avc1.640028", "avc1.4d0028", "avc1.42002a", "avc1.42001f"];
   for (const codec of codecs) {
@@ -51,10 +57,11 @@ async function pickAudioCodec(): Promise<{ codec: string; mux: "aac" | "opus" } 
  * The video as an MP4, drawn and encoded frame by frame — faster than real
  * time and never dropping a frame, all inside this browser.
  */
-export async function exportMp4(project: Project, timeline: Timeline, quality: Quality, onProgress: (share: number) => void, signal?: AbortSignal): Promise<Exported> {
+export async function exportMp4(project: Project, timeline: Timeline, options: ExportOptions, onProgress: (share: number) => void, signal?: AbortSignal): Promise<Exported> {
+  const { quality, fps: FPS, assets } = options;
   const { width, height, k } = pixelSize(project, quality);
-  const bitrate = Math.round(width * height * FPS * 0.11);
-  const videoCodec = await pickVideoCodec(width, height, bitrate);
+  const bitrate = Math.round(width * height * 30 * 0.11 * (FPS > 30 ? 1.4 : 1));
+  const videoCodec = await pickVideoCodec(width, height, bitrate, FPS);
   if (!videoCodec) throw new Error("This browser can't encode video at this size. Try a smaller quality, or Chrome / Edge.");
   const audioCodec = timeline.audio ? await pickAudioCodec() : null;
 
@@ -84,7 +91,7 @@ export async function exportMp4(project: Project, timeline: Timeline, quality: Q
     }
     if (failure) throw failure;
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    drawFrame(ctx, project, timeline, i / FPS);
+    drawFrame(ctx, project, timeline, i / FPS, assets);
     const frame = new VideoFrame(canvas as CanvasImageSource, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
     video.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
     frame.close();
@@ -124,7 +131,8 @@ export async function exportMp4(project: Project, timeline: Timeline, quality: Q
  * For browsers without WebCodecs: plays the video on a canvas and records it
  * as it plays (real time, WebM).
  */
-export async function exportRecording(project: Project, timeline: Timeline, quality: Quality, onProgress: (share: number) => void, signal?: AbortSignal): Promise<Exported> {
+export async function exportRecording(project: Project, timeline: Timeline, options: ExportOptions, onProgress: (share: number) => void, signal?: AbortSignal): Promise<Exported> {
+  const { quality, fps: FPS, assets } = options;
   const { width, height, k } = pixelSize(project, quality);
   const canvas = Object.assign(document.createElement("canvas"), { width, height });
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -147,7 +155,7 @@ export async function exportRecording(project: Project, timeline: Timeline, qual
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
   ctx.setTransform(k, 0, 0, k, 0, 0);
-  drawFrame(ctx, project, timeline, 0);
+  drawFrame(ctx, project, timeline, 0, assets);
   recorder.start(500);
   const began = audioCtx.currentTime;
   source?.start();
@@ -156,7 +164,7 @@ export async function exportRecording(project: Project, timeline: Timeline, qual
       const t = audioCtx.currentTime - began;
       if (signal?.aborted) return reject(new DOMException("Stopped", "AbortError"));
       ctx.setTransform(k, 0, 0, k, 0, 0);
-      drawFrame(ctx, project, timeline, Math.min(t, timeline.duration));
+      drawFrame(ctx, project, timeline, Math.min(t, timeline.duration), assets);
       onProgress(Math.min(1, t / timeline.duration));
       if (t >= timeline.duration) return resolve();
       requestAnimationFrame(tick);

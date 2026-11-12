@@ -1,116 +1,218 @@
-import { Studio } from "@/components/Studio";
+import { ArrowRight, Clapperboard } from "lucide-react";
+import Link from "next/link";
+import { Figure } from "@/components/Figure";
+import { LanguageDemo } from "@/components/LanguageDemo";
+import { BACKGROUNDS } from "@/engine/backgrounds";
+import { CHARACTERS, VOICES } from "@/engine/characters";
 import { FAQ, NETWORK_LINKS, SITE } from "@/lib/site";
 
-const FEATURES: Array<{ icon: string; title: string; text: string; color: string }> = [
-  { icon: "🧑‍🤝‍🧑", title: "13 ready characters", text: "Kids, friends, Amma, Appa, Paati, Thatha, a teacher, a boss and a doctor — each with their own look and voice. Any name in your script gets one.", color: "var(--yellow)" },
-  { icon: "👄", title: "Real lip sync", text: "Mouths open and change shape with the actual sound of the voice, sixty times a second — in any language.", color: "var(--pink)" },
-  { icon: "🗣️", title: "Tamil · Telugu · Hindi · English", text: "Plus Tanglish and Hinglish: a Tamil or Hindi voice with subtitles in English letters. 30 natural Gemini voices.", color: "var(--mint-soft)" },
-  { icon: "💬", title: "Word-by-word subtitles", text: "Four styles that light up each word as it is spoken, in the right font for every script. Also saved as an .srt file.", color: "var(--violet-soft)" },
-  { icon: "🏞️", title: "16 backgrounds", text: "Classroom, kitchen, tea shop, park, office, beach and more. Change the place mid-video with one line in the script.", color: "var(--sky)" },
-  { icon: "🎭", title: "Acting, automatically", text: "Moods, gestures, who looks at whom, a camera push on the punch line, a facepalm from the listener and floating laughs.", color: "var(--yellow)" },
-  { icon: "✨", title: "AI script writer", text: "Stuck? Give a topic and Gemini writes the dialogue in your language — and the YouTube title, description and tags after.", color: "var(--pink)" },
-  { icon: "🎵", title: "Music & sound effects", text: "Three music moods and comedy sound effects, made by the site itself — nothing to license, no copyright claims.", color: "var(--mint-soft)" },
-  { icon: "🎬", title: "MP4 up to 4K, no watermark", text: "9:16 for Shorts and Reels, 16:9 for YouTube, 1:1 for posts. Encoded inside your browser, faster than real time.", color: "var(--violet-soft)" },
+const LINES: Array<{ name: string; note: string; text: string }> = [
+  { name: "Tamil", note: "Tamil voice, Tamil captions", text: "அம்மா, நான்தான் டீச்சரோட ஃபேவரிட் ஸ்டூடன்ட்!" },
+  { name: "Tanglish", note: "Tamil voice, English letters", text: "Amma, naan thaan teacher-oda favourite student!" },
+  { name: "Telugu", note: "Telugu voice and captions", text: "అమ్మా, నేనే టీచర్ ఫేవరెట్ స్టూడెంట్‌ని!" },
+  { name: "Hindi", note: "Hindi voice and captions", text: "मम्मी, मैं टीचर की फेवरेट स्टूडेंट हूँ!" },
+  { name: "Hinglish", note: "Hindi voice, English letters", text: "Mummy, main teacher ki favourite student hoon!" },
+  { name: "English", note: "English voice and captions", text: "Mom, my teacher says I'm her favourite student!" },
 ];
 
 const STEPS: Array<{ title: string; text: string }> = [
-  { title: "Write the script", text: "One line per turn — Meena: Hello! Add a mood in brackets if you like, or let the AI write it from a topic." },
-  { title: "Pick cast and scene", text: "Choose who plays each name, their voice, the background, the subtitle style and the music." },
-  { title: "Paste your Gemini key", text: "Free from Google AI Studio. It stays in your browser and is used only to record the voices." },
-  { title: "Make and download", text: "Press the red button. The voices are recorded, the mouths are synced and your MP4 is ready." },
+  { title: "Write the dialogue", text: "One line per turn, like Meena: Hello! Add a mood in brackets, or let Gemini draft it from a topic." },
+  { title: "Cast it", text: "Every name gets a character and a voice. Swap either, pick a scene, captions and music." },
+  { title: "Record the voices", text: "Press play. The lines are spoken with your Gemini key and the mouths sync to the sound." },
+  { title: "Export", text: "Download an MP4 for Shorts, Reels or YouTube — up to 4K, no watermark." },
+];
+
+const FEATURES: Array<{ title: string; text: string }> = [
+  { title: "Lip sync from the real voice", text: "Mouths open and change shape with the sound itself, sixty times a second, so it works in every language." },
+  { title: "Captions that follow the words", text: "Pop, karaoke, boxed or clean, in any colour, in the right script for each language. Also exported as .srt." },
+  { title: "Actors that act", text: "Moods, gestures, who looks at whom, a camera that follows the speaker, and a reaction on the punch line." },
+  { title: "Scenes and your own pictures", text: `${BACKGROUNDS.length} drawn sets — classroom, tea shop, office, beach — or upload a photo. Change the place mid-scene.` },
+  { title: "Music without claims", text: "Three built-in tracks generated in the browser, or your own audio file underneath the dialogue." },
+  { title: "A writer when you need one", text: "Gemini drafts the dialogue in your language from a topic, and writes the YouTube title, description and tags." },
+  { title: "Every shape", text: "9:16 for Shorts and Reels, 16:9 for YouTube, 1:1 for posts — at 30 or 60 frames per second." },
+  { title: "Projects you can keep", text: "Your work is saved in the browser automatically; save a project file to move it or come back later." },
 ];
 
 export default function Home() {
   return (
     <>
-      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--paper)", borderBottom: "3px solid var(--ink)" }}>
-        <div className="wrap flex items-center gap-3" style={{ minHeight: 64 }}>
-          <a href="#top" className="display flex items-center gap-2 text-xl sm:text-2xl" style={{ textDecoration: "none", whiteSpace: "nowrap" }}>
-            <span aria-hidden="true" style={{ display: "inline-grid", placeItems: "center", width: 40, height: 40, borderRadius: 12, border: "3px solid var(--ink)", background: "var(--coral)", boxShadow: "var(--shadow-sm)", fontSize: 20 }}>🎬</span>
+      <header className="nav">
+        <div className="wrap nav-row">
+          <Link href="/" className="brand">
+            <span className="brand-mark" aria-hidden="true"><Clapperboard size={15} color="#fff" /></span>
             {SITE.name}
-          </a>
-          <span className="grow" />
-          <nav className="hidden items-center gap-5 sm:flex" aria-label="Sections" style={{ fontWeight: 800 }}>
-            <a href="#features" style={{ textDecoration: "none" }}>Features</a>
-            <a href="#how" style={{ textDecoration: "none" }}>How it works</a>
-            <a href="#faq" style={{ textDecoration: "none" }}>FAQ</a>
+          </Link>
+          <nav className="nav-links" aria-label="Sections">
+            <a href="#cast">Cast</a>
+            <a href="#languages">Languages</a>
+            <a href="#how">How it works</a>
+            <a href="#faq">FAQ</a>
           </nav>
-          <a href="#studio" className="btn btn-yellow" style={{ minHeight: 40, whiteSpace: "nowrap", padding: "6px 14px" }}>Make a video</a>
+          <Link href="/editor/" className="btn btn-primary">Open editor</Link>
         </div>
       </header>
 
-      <main id="top">
-        <section className="wrap" style={{ paddingTop: 44, paddingBottom: 28, textAlign: "center" }}>
-          <span className="burst">Free · No sign-up · No watermark</span>
-          <h1 className="mx-auto mt-5" style={{ fontSize: "clamp(2.3rem, 6.2vw, 4.4rem)", maxWidth: 900 }}>
-            Type a script. Get a <span className="mark">talking cartoon</span> video.
-          </h1>
-          <p className="mx-auto mt-4" style={{ maxWidth: 680, fontSize: "1.15rem", fontWeight: 600, color: "var(--muted)" }}>
-            13 characters, real lip sync, voices and subtitles in Tamil, Telugu, Hindi and English. Made in your browser with your own free Gemini API key.
-          </p>
+      <main>
+        <section className="hero">
+          <div className="wrap hero-grid">
+            <div>
+              <h1 className="hero-title">
+                Your script, <em>performed</em> by cartoon actors.
+              </h1>
+              <p className="hero-sub">
+                Write a dialogue and {SITE.name} turns it into a finished short: {CHARACTERS.length} characters, real voices, lip sync and captions in Tamil, Telugu, Hindi and English.
+              </p>
+              <div className="hero-cta">
+                <Link href="/editor/" className="btn btn-primary btn-lg">Start a video <ArrowRight size={17} /></Link>
+                <a href="#cast" className="text-link">Meet the cast</a>
+              </div>
+              <p className="hero-meta">Free to use · Runs in your browser · Voices with your own Gemini API key</p>
+            </div>
+            <LanguageDemo />
+          </div>
         </section>
 
-        <section id="studio" className="wrap" style={{ paddingBottom: 56 }} aria-label="Video studio">
-          <Studio />
-        </section>
+        <div className="wrap">
+          <div className="platforms">
+            <span>Made for</span>
+            <span>YouTube Shorts</span>
+            <span>Instagram Reels</span>
+            <span>TikTok</span>
+            <span>YouTube</span>
+            <span>WhatsApp Status</span>
+          </div>
+        </div>
 
-        <section id="features" style={{ background: "var(--ink)", color: "#fff", padding: "56px 0" }}>
+        <section id="cast" className="section">
           <div className="wrap">
-            <h2 style={{ fontSize: "clamp(1.9rem, 4.4vw, 3rem)", textAlign: "center" }}>Everything is set up already</h2>
-            <p className="mx-auto mt-2 text-center" style={{ maxWidth: 620, opacity: 0.8, fontWeight: 600 }}>No timeline, no keyframes, no editing skills. The script is the whole job.</p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map((f) => (
-                <article key={f.title} style={{ background: f.color, color: "var(--ink)", border: "3px solid #fff", borderRadius: 20, padding: 20 }}>
-                  <div aria-hidden="true" style={{ fontSize: 34, lineHeight: 1 }}>{f.icon}</div>
-                  <h3 className="mt-3 text-xl">{f.title}</h3>
-                  <p className="mt-1" style={{ fontWeight: 600 }}>{f.text}</p>
-                </article>
+            <div className="section-head">
+              <h2 className="section-title">Meet the cast.</h2>
+              <p className="section-sub">
+                {CHARACTERS.length} characters, each with a voice of their own — from {VOICES.length} — and every one of them can be recast. Write any name in your script and someone steps in.
+              </p>
+            </div>
+            <div className="cast-grid">
+              {CHARACTERS.map((c) => (
+                <div key={c.id} className="cast-tile">
+                  <Figure id={c.id} height={140} />
+                  <strong>{c.name}</strong>
+                  <span>{c.blurb}</span>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="how" className="wrap" style={{ padding: "56px 16px" }}>
-          <h2 style={{ fontSize: "clamp(1.9rem, 4.4vw, 3rem)", textAlign: "center" }}>How it works</h2>
-          <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" style={{ listStyle: "none", padding: 0 }}>
-            {STEPS.map((s, i) => (
-              <li key={s.title} className="card p-5">
-                <span className="step">{i + 1}</span>
-                <h3 className="mt-3 text-xl">{s.title}</h3>
-                <p className="mt-1" style={{ fontWeight: 600, color: "var(--muted)" }}>{s.text}</p>
-              </li>
-            ))}
-          </ol>
+        <section id="languages" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">One scene, six ways to say it.</h2>
+              <p className="section-sub">The voice reads the line in its own script; the caption can follow it or switch to English letters — write <code>spoken | caption</code>.</p>
+            </div>
+            <div className="lang-table">
+              {LINES.map((l) => (
+                <div key={l.name} className="lang-row">
+                  <b>{l.name}<small>{l.note}</small></b>
+                  <p>{l.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
-        <section id="faq" className="wrap" style={{ paddingBottom: 64, maxWidth: 860 }}>
-          <h2 style={{ fontSize: "clamp(1.9rem, 4.4vw, 3rem)", textAlign: "center" }}>Questions</h2>
-          <div className="mt-8 grid gap-3">
-            {FAQ.map((f) => (
-              <details key={f.q} className="card" style={{ padding: "14px 18px" }}>
-                <summary className="display text-lg">{f.q}</summary>
-                <p className="mt-2" style={{ fontWeight: 600, color: "var(--muted)" }}>{f.a}</p>
-              </details>
-            ))}
+        <section id="how" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">From script to MP4 in four steps.</h2>
+              <p className="section-sub">No timeline to learn and no keyframes. The editor has every setting, but the script is the only thing you have to write.</p>
+            </div>
+            <ol className="steps">
+              {STEPS.map((s, i) => (
+                <li key={s.title}>
+                  <span className="step-n">0{i + 1}</span>
+                  <h3>{s.title}</h3>
+                  <p>{s.text}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">Everything a short needs.</h2>
+              <p className="section-sub">Set up already, and adjustable when you want it.</p>
+            </div>
+            <div className="feature-list">
+              {FEATURES.map((f) => (
+                <div key={f.title}>
+                  <h3>{f.title}</h3>
+                  <p>{f.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="wrap">
+            <div className="privacy">
+              <h2>Your key and your videos stay on your device.</h2>
+              <div style={{ display: "grid", gap: 12 }}>
+                <p>
+                  {SITE.name} has no server that sees your work. The editor runs in your browser, the video is encoded there, and your Gemini key is stored there — sent only to Google, to record the voices.
+                </p>
+                <p>
+                  A free key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> takes a minute and covers several videos a day.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="faq" className="section">
+          <div className="wrap" style={{ maxWidth: 860 }}>
+            <h2 className="section-title" style={{ marginBottom: 32 }}>Questions</h2>
+            <div className="faq">
+              {FAQ.map((f) => (
+                <details key={f.q}>
+                  <summary>{f.q}<span aria-hidden="true">+</span></summary>
+                  <p>{f.a}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingTop: 24 }}>
+          <div className="wrap">
+            <div className="cta">
+              <div>
+                <h2>Make your first one in five minutes.</h2>
+                <p>Open the editor, load the sample and press play.</p>
+              </div>
+              <Link href="/editor/" className="btn btn-accent btn-lg">Open the editor <ArrowRight size={17} /></Link>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer style={{ borderTop: "3px solid var(--ink)", background: "var(--paper-2)", padding: "36px 0 28px" }}>
+      <footer className="foot">
         <div className="wrap">
           <nav aria-label="CodeLove network">
-            <h2 className="text-lg">CodeLove network</h2>
-            <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-5" style={{ listStyle: "none", padding: 0, margin: 0, fontWeight: 700 }}>
+            <h2>CodeLove network</h2>
+            <ul>
               {NETWORK_LINKS.map((l) => (
                 <li key={l.href}><a href={l.href} title={l.title}>{l.label}</a></li>
               ))}
             </ul>
           </nav>
-          <p className="mt-6" style={{ fontWeight: 600, color: "var(--muted)" }}>
-            Built with ♥ by <a href={SITE.creatorUrl}>{SITE.creator}</a> · <a href={SITE.brandUrl}>{SITE.brand}</a> · <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
+          <p className="foot-line">
+            Built by <a href={SITE.creatorUrl}>{SITE.creator}</a> · <a href={SITE.brandUrl}>{SITE.brand}</a> · <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
             {" · "}<a href="https://codelove.in/legal/privacy">Privacy</a> · <a href="https://codelove.in/legal/terms">Terms</a>
+            <br />Voices by Google Gemini with your own API key. {SITE.name} is not affiliated with Google.
           </p>
-          <p className="hint mt-2">Voices by Google Gemini, with your own API key. {SITE.name} is not affiliated with Google.</p>
         </div>
       </footer>
     </>
