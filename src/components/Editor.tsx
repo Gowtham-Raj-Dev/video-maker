@@ -533,7 +533,8 @@ export function Editor() {
   const voiceOptions: Array<Option<string>> = VOICES.map((v) => ({ value: v.name, label: v.name, hint: v.tone, group: v.kind === "F" ? "Female voices" : "Male voices" }));
   const lineOptions: Array<Option<string>> = [
     ...project.cast.map((c) => ({ value: c.name, label: c.name, group: "In this video", icon: <Avatar id={c.characterId} size={30} /> })),
-    ...CHARACTERS.filter((c) => !project.cast.some((m) => m.name === c.name)).map((c) => ({ value: c.name, label: c.name, hint: c.blurb, group: "Add someone new", icon: <Avatar id={c.id} size={30} /> })),
+    // Both styles share names (a Classic and a Slim "Meena"): a name is offered once.
+    ...CHARACTERS.filter((c, i) => !project.cast.some((m) => m.name === c.name) && CHARACTERS.findIndex((x) => x.name === c.name) === i).map((c) => ({ value: c.name, label: c.name, hint: c.blurb, group: "Add someone new", icon: <Avatar id={c.id} size={30} /> })),
   ];
   const sceneOptions: Array<Option<string>> = BACKGROUNDS.slice(0, 12).map((b) => ({
     value: b.id, label: b.name,

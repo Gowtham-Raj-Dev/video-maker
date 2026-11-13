@@ -2352,3 +2352,120 @@ details > summary::-webkit-details-marker {
     display: none;
   }
 }
+
+/* ==== Phones: a compact pinned preview, so most of the screen is left for editing ==== */
+@media (max-width: 639px) {
+  .ed-cast {
+    display: none;
+  }
+  .ed-main {
+    grid-template-rows: 33dvh auto auto;
+    box-shadow: 0 6px 16px -10px rgba(22, 21, 26, 0.25);
+  }
+  .ed-stage canvas {
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+  }
+  .voice-gate {
+    bottom: 8px;
+    width: auto;
+    max-width: calc(100% - 16px);
+    flex-wrap: nowrap;
+    padding: 5px;
+    border-radius: 999px;
+  }
+  .voice-gate-text {
+    display: none;
+  }
+  .voice-gate-actions {
+    width: auto;
+  }
+  .voice-gate .btn {
+    min-height: 34px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+  .ed-transport {
+    min-height: 44px;
+    padding: 2px 10px;
+  }
+  .tp-time {
+    font-size: 12.5px;
+  }
+  .tp-play {
+    width: 36px;
+    height: 36px;
+  }
+  .tp-ctrls .btn-icon {
+    width: 34px;
+    min-height: 34px;
+  }
+  .tl2-ruler {
+    height: 20px;
+  }
+  .tl2-ruler span {
+    height: 11px;
+    font-size: 9.5px;
+  }
+  .tl2-lane {
+    height: 34px;
+  }
+  .tl2-clip {
+    top: 4px;
+    bottom: 4px;
+    padding: 0 6px;
+  }
+  .tl2-clip span {
+    display: none;
+  }
+  .tl2-area {
+    padding: 0 10px;
+  }
+  /* All seven tabs in one row. */
+  .rail {
+    overflow: visible;
+    padding: 4px 4px 6px;
+  }
+  .rail button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 0 6px;
+    font-size: 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rail button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .rail button[aria-selected="true"]::before {
+    left: 10px;
+    right: 10px;
+    bottom: -6px;
+  }
+  .ed-panel {
+    padding: 0 14px 28px;
+  }
+  .ed-panel-head {
+    margin: 0 -14px 14px;
+    padding: 12px 14px;
+  }
+  .ed-panel-head p {
+    font-size: 12.5px;
+  }
+  .ed-panel-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .lib-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .ed-top .btn {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+}
