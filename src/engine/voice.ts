@@ -1,5 +1,5 @@
 import { splitDialogue, trimSilence } from "./audio";
-import { GeminiError, speak, ttsModelName, withKeys } from "./gemini";
+import { GeminiError, activeSlot, speak, withPool } from "./gemini";
 import { getVoice, putVoice, voiceKey } from "./store";
 import type { CastMember, Line } from "./types";
 
@@ -77,13 +77,15 @@ export async function recordVoices(
     for (let attempt = 0; ; attempt++) {
       if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
       try {
-        pcm = await withKeys(keys, (k) => speak(k, turns, voices));
+        // Every key × every voice model, in turn: a used-up one hands over to the next by itself.
+        pcm = await withPool(keys, "tts", (k, model) => speak(k, model, turns, voices));
         break;
       } catch (error) {
-        // Free keys allow only a few voice requests a minute: wait it out twice before giving up.
-        if (!(error instanceof GeminiError) || error.status !== 429 || attempt >= 2) throw error;
-        onProgress({ done, total: lines.length, note: "Google's per-minute limit reached — waiting 25 seconds, then carrying on…" });
-        await wait(25_000, signal);
+        // Every pair is only resting for a minute: wait until the first is free, then carry on.
+        if (!(error instanceof GeminiError) || error.status !== 429 || error.daily || attempt >= 6 || error.retryMs > 3 * 60_000) throw error;
+        const seconds = Math.ceil(error.retryMs / 1000) + 1;
+        onProgress({ done, total: lines.length, note: `${keys.length > 1 ? "All keys are" : "The key is"} at Google's per-minute limit — carrying on in ${seconds} s…` });
+        await wait(seconds * 1000, signal);
       }
     }
     const parts = indexes.length === 1 ? [trimSilence(pcm.samples, pcm.rate)] : splitDialogue(pcm, turns.map((t) => t.text));
@@ -96,7 +98,9 @@ export async function recordVoices(
   };
 
   for (const chunk of chunksOf(lines, perLine)) {
-    onProgress({ done, total: lines.length, note: `Recording ${[...new Set(chunk.map((i) => lines[i].speaker))].join(" & ")} (${ttsModelName()})…` });
+    const slot = activeSlot();
+    const via = slot ? ` · key ${keys.indexOf(slot.key) + 1}, ${slot.model}` : "";
+    onProgress({ done, total: lines.length, note: `Recording ${[...new Set(chunk.map((i) => lines[i].speaker))].join(" & ")}${via}…` });
     const parts = await record(chunk);
     if (!parts) {
       // The pauses weren't clear enough to cut this run apart: record its lines one by one instead.

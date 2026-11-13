@@ -1,11 +1,18 @@
 /** The site's name and address live here only: change them in this one file (and next.config.mjs, public/CNAME). */
 export const SITE = {
   name: "Video Maker",
-  tagline: "Type a script. Get a talking cartoon video.",
+  /** The name with the brand, for titles and structured data. */
+  fullName: "CodeLove Video Maker",
+  tagline: "Turn a script into a talking cartoon video.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://videomaker.codelove.in",
-  title: "Video Maker — Free AI Cartoon Videos with Lip Sync (Tamil, Hindi, Telugu, English)",
+  // ~60 characters so Google shows it whole; the strongest words first.
+  title: "Free AI Video Maker – Script to Talking Cartoon Video | CodeLove",
+  // ~155 characters: what it is, what you get, why it's free.
   description:
-    "Free cartoon video maker: type a dialogue, pick from 24 characters, and get a talking cartoon video with lip sync, voices and subtitles in Tamil, Tanglish, Telugu, Hindi and English. Runs in your browser with your own free Gemini API key — no sign-up, no watermark.",
+    "Free AI video maker by CodeLove. Type a script, get a talking cartoon or text video with AI voices, lip sync, subtitles & music. No sign-up, no watermark.",
+  /** The longer pitch, for social cards and structured data. */
+  longDescription:
+    "CodeLove Video Maker is a free AI video maker that runs in your browser. Type a dialogue and 66 cartoon characters act it out with real AI voices, lip sync, word-by-word subtitles and background music — or make a text-only video with big captions on a plain screen. Tamil, Tanglish, Telugu, Hindi, Hinglish and English. Export MP4 for YouTube Shorts, Instagram Reels and YouTube up to 4K. No sign-up, no watermark, your own free Gemini API key.",
   creator: "Gowtham",
   creatorUrl: "https://gowtham.codelove.in",
   brand: "CodeLove",
@@ -22,12 +29,19 @@ export const NETWORK_LINKS: ReadonlyArray<{ label: string; href: string; title: 
   { label: "Link in Bio", href: "https://linkinbio.codelove.in", title: "Free link-in-bio pages" },
   { label: "Video to GIF", href: "https://videotogif.codelove.in", title: "Convert video to GIF" },
   { label: "Video to Images", href: "https://videotoimages.codelove.in", title: "Extract frames, compress & convert videos" },
-  { label: "Video Cut", href: "https://videocut.codelove.in", title: "Split long videos into Shorts" },
-  { label: "Free YouTube Automation", href: "https://utubeflow.codelove.in", title: "Bulk upload & schedule YouTube videos" },
+  { label: "Video Cut", href: "https://videocut.codelove.in", title: "Split long videos into Shorts" },  { label: "Free YouTube Automation", href: "https://utubeflow.codelove.in", title: "Bulk upload & schedule YouTube videos" },
   { label: "Free Java Games", href: "https://javaplay.codelove.in", title: "Play old Java J2ME phone games" },
 ];
 
 export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: "Is this a free AI video maker?",
+    a: "Yes. CodeLove Video Maker turns a typed script into a finished video with AI voices, lip-synced cartoon characters, subtitles and music — free, with no sign-up and no watermark. The AI voices and the optional AI script writer use Google Gemini through your own free API key.",
+  },
+  {
+    q: "Can I make a video without cartoon characters?",
+    a: "Yes. Choose “Text only” at the top of the Script panel: the video becomes big word-by-word subtitles on a plain colour screen (or a picture), with the same AI voices, smooth background music and sound effects. It suits stories, facts, quotes and narration videos.",
+  },
   {
     q: "Is Video Maker free?",
     a: "Yes. The site is free and adds no watermark. The voices come from Google's Gemini API using your own API key, and Google gives every key a free daily limit — enough for several videos a day.",

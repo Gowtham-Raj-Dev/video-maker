@@ -14,7 +14,7 @@ import { buildTimeline } from "@/engine/audio";
 import { BACKGROUNDS } from "@/engine/backgrounds";
 import { CHARACTERS, STYLES, VOICES, characterById } from "@/engine/characters";
 import { canEncodeMp4, exportMp4, exportRecording, toSrt, type Quality } from "@/engine/export";
-import { checkKey, speak, splitKeys, withKeys, writeMeta, writeScript, type VideoMeta } from "@/engine/gemini";
+import { checkKey, keyReport, onPoolChange, speak, splitKeys, withPool, writeMeta, writeScript, type VideoMeta } from "@/engine/gemini";
 import { LANGUAGES, MOODS, SAMPLES, defaultProject, parseScript, syncCast } from "@/engine/script";
 import { clearVoices, loadKeys, loadProject, saveKeys, saveProject } from "@/engine/store";
 import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline, type VideoMode } from "@/engine/types";
@@ -212,6 +212,10 @@ export function Editor() {
   const [keysText, setKeysText] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keyState, setKeyState] = useState<{ ok: boolean; text: string } | null>(null);
+  const [newKey, setNewKey] = useState("");
+  // Redraw the key list whenever a key's state changes (used up, refused, back).
+  const [, setPoolTick] = useState(0);
+  useEffect(() => onPoolChange(() => setPoolTick((n) => n + 1)), []);
   const [voiced, setVoiced] = useState<{ sig: string; voices: LineVoice[] } | null>(null);
   const [status, setStatus] = useState<Status>({ phase: "idle" });
   const [error, setError] = useState("");
@@ -400,7 +404,7 @@ export function Editor() {
     const names = [...project.cast.map((c) => c.name), ...CHARACTERS.map((c) => c.name).filter((n) => !project.cast.some((c) => c.name === n))].slice(0, ai.people);
     setStatus({ phase: "writing", note: "Gemini is writing your script…", share: 0.5 });
     try {
-      setScript(await withKeys(keys, (key) => writeScript(key, { topic: ai.topic.trim(), language: project.language, tone: ai.tone, lines: ai.lines, names, backgrounds: BACKGROUNDS.slice(0, 12).map((b) => b.id) })));
+      setScript(await withPool(keys, "text", (key, model) => writeScript(key, model, { topic: ai.topic.trim(), language: project.language, tone: ai.tone, lines: ai.lines, names, backgrounds: BACKGROUNDS.slice(0, 12).map((b) => b.id) })));
       setAi((a) => ({ ...a, open: false }));
     } catch (e) {
       setError(messageOf(e));
@@ -414,7 +418,7 @@ export function Editor() {
     if (!keys.length) return needKey();
     setStatus({ phase: "writing", note: "Gemini is writing the title, description and tags…", share: 0.5 });
     try {
-      setMeta(await withKeys(keys, (key) => writeMeta(key, project.script, language.name)));
+      setMeta(await withPool(keys, "text", (key, model) => writeMeta(key, model, project.script, language.name)));
     } catch (e) {
       setError(messageOf(e));
     } finally {
@@ -422,16 +426,36 @@ export function Editor() {
     }
   }
 
-  async function testKey() {
-    if (!keys.length) return setKeyState({ ok: false, text: "Paste a key first." });
+  /** Checks keys (listing their models spends none of the free limit). */
+  async function testKeys(list = keys) {
+    if (!list.length) return setKeyState({ ok: false, text: "Add a key first." });
     setKeyState({ ok: true, text: "Checking…" });
-    try {
-      for (const key of keys) await checkKey(key);
-      setKeyState({ ok: true, text: keys.length > 1 ? `All ${keys.length} keys work.` : "This key works. Press “Generate voice” to hear your characters." });
-    } catch (e) {
-      setKeyState({ ok: false, text: messageOf(e) });
-    }
+    const results = await Promise.all(list.map((k) => checkKey(k).then(() => true, () => false)));
+    const good = results.filter(Boolean).length;
+    setKeyState(
+      good === list.length
+        ? { ok: true, text: list.length > 1 ? `All ${list.length} keys work. They are used in turn, every voice model of each.` : "This key works. Press “Generate voice” to hear your characters." }
+        : { ok: good > 0, text: `${good} of ${list.length} ${list.length === 1 ? "key works" : "keys work"} — the others are skipped. See each key below.` },
+    );
   }
+
+  const setKeyList = (list: string[]) => {
+    const text = list.join(", ");
+    setKeysText(text);
+    saveKeys(text);
+  };
+  const addKeys = () => {
+    const fresh = splitKeys(newKey).filter((k) => !keys.includes(k));
+    if (!fresh.length) return;
+    setKeyList([...keys, ...fresh]);
+    setNewKey("");
+    void testKeys(fresh);
+  };
+  const removeKey = (key: string) => {
+    setKeyList(keys.filter((k) => k !== key));
+    setKeyState(null);
+  };
+  const mask = (k: string) => (k.length > 12 ? `${k.slice(0, 6)}••••••${k.slice(-4)}` : "••••••");
 
   /** Speaks one of the member's lines in their voice, to hear it before recording everything. */
   async function testVoice(member: CastMember) {
@@ -440,7 +464,7 @@ export function Editor() {
     setTesting(member.name);
     try {
       const text = parsed.lines.find((l) => l.speaker === member.name)?.text ?? `Hello, I am ${member.name}.`;
-      const pcm = await withKeys(keys, (key) => speak(key, [{ speaker: member.name, text }], { [member.name]: member.voice }));
+      const pcm = await withPool(keys, "tts", (key, model) => speak(key, model, [{ speaker: member.name, text }], { [member.name]: member.voice }));
       const audio = (sampleRef.current ??= new AudioContext());
       await audio.resume();
       const buffer = audio.createBuffer(1, pcm.samples.length, pcm.rate);
@@ -841,15 +865,70 @@ export function Editor() {
               </p>
               <a className="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"><KeyRound size={16} /> Get a key from Google AI Studio ↗</a>
               <div>
-                <label className="lbl" htmlFor="key">Your key</label>
-                <input id="key" className="field" style={{ fontFamily: "ui-monospace, monospace" }} type={showKey ? "text" : "password"} autoComplete="off" spellCheck={false} value={keysText} onChange={(e) => { setKeysText(e.target.value); saveKeys(e.target.value); setKeyState(null); }} placeholder="AIza…" />
+                <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+                  <span className="lbl" style={{ margin: 0 }}>Your keys{keys.length ? ` · ${keys.length}` : ""}</span>
+                  {keys.length > 0 && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowKey((s) => !s)}>{showKey ? "Hide" : "Show"}</button>
+                  )}
+                </div>
+                {keys.length === 0 && <p className="hint" style={{ margin: "0 0 8px" }}>No key yet. Paste one below.</p>}
+                <ul className="key-list">
+                  {keys.map((k, i) => {
+                    const r = keyReport(k);
+                    const allResting = r.tts !== undefined && r.tts > 0 && r.ttsResting >= r.tts;
+                    const state = r.dead ? "dead" : allResting ? "rest" : r.tts !== undefined ? "ok" : "new";
+                    const back = r.backAt ? new Date(r.backAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+                    const text = r.dead
+                      ? r.dead
+                      : allResting
+                        ? `Voice limit used on every model — back at ${back}`
+                        : r.tts !== undefined
+                          ? `Works · ${r.tts} voice + ${r.text} text models${r.ttsResting ? ` · ${r.ttsResting} resting till ${back}` : ""}`
+                          : "Not checked yet";
+                    return (
+                      <li key={k} className="key-row" data-state={state}>
+                        <span className="key-n">{i + 1}</span>
+                        <div className="key-main">
+                          <code>{showKey ? k : mask(k)}</code>
+                          <small>
+                            <i aria-hidden="true" />
+                            {text}
+                            {r.active && state === "ok" && <b> · in use</b>}
+                          </small>
+                        </div>
+                        <button type="button" className="btn btn-ghost btn-sm btn-icon" style={{ width: 30 }} onClick={() => removeKey(k)} aria-label={`Remove key ${i + 1}`} title="Remove this key"><X size={15} /></button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" className="btn" onClick={() => setShowKey((s) => !s)}>{showKey ? "Hide" : "Show"}</button>
-                <button type="button" className="btn btn-teal" onClick={testKey}>Test key</button>
+              <div>
+                <label className="lbl" htmlFor="key">{keys.length ? "Add another key" : "Paste your key"}</label>
+                <div className="flex gap-2">
+                  <input
+                    id="key"
+                    className="field"
+                    style={{ fontFamily: "ui-monospace, monospace" }}
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addKeys(); } }}
+                    onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t.trim()) { e.preventDefault(); setNewKey((v) => `${v}${v ? "," : ""}${t.trim()}`); } }}
+                    placeholder="AIza…"
+                  />
+                  <button type="button" className="btn btn-teal" disabled={!newKey.trim()} onClick={addKeys}><Plus size={16} /> Add</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>You can paste several at once, separated by commas or new lines.</p>
               </div>
+              {keys.length > 0 && <button type="button" className="btn" onClick={() => void testKeys()}><RefreshCw size={15} /> Check all keys</button>}
               {keyState && <p className={`note ${keyState.ok ? "note-ok" : "note-error"}`} role="status">{keyState.text}</p>}
-              <p className="hint">🔒 Saved only in this browser and sent only to Google. More than one key? Separate them with a comma — when one runs out, the next takes over.</p>
+              <div className="note" style={{ display: "grid", gap: 4 }}>
+                <b style={{ color: "var(--fg)" }}>How more keys help</b>
+                <span>Google&apos;s free limit counts per key <i>and</i> per model. Video Maker uses every voice model of your first key, then the next key, and so on — when one runs out, the next takes over by itself, and it comes back when its limit resets.</span>
+              </div>
+              <p className="hint">🔒 Saved only in this browser and sent only to Google.</p>
             </div>
           )}
 

@@ -1,0 +1,26 @@
+# CodeLove Video Maker (videomaker.codelove.in)
+
+> Free AI video maker that runs in the browser. Type a script and get a talking cartoon video — 66 characters with AI voices (Google Gemini, the visitor's own free key), lip sync, word-by-word subtitles, background music and sound effects — or a text-only video with big captions on a plain screen. Tamil, Tanglish, Telugu, Hindi, Hinglish and English. MP4 export for YouTube Shorts, Instagram Reels and YouTube up to 4K. No sign-up, no watermark.
+
+## Pages
+- [Video Maker home](https://videomaker.codelove.in/): What it does, the cast, languages, how it works, FAQ.
+- [Video Maker editor](https://videomaker.codelove.in/editor/): The free online editor — script, cast & voices, scene, captions, audio, export.
+
+## Key facts
+- Free to use, no account, no watermark.
+- Voices and the optional AI script writer use Google Gemini through the user's own free API key, stored only in their browser.
+- Two video types: "With characters" (cartoon people act the lines with lip sync) and "Text only" (captions on a plain colour screen).
+- Formats: 9:16, 16:9, 1:1; 720p to 4K; 30 or 60 fps; subtitles also export as .srt.
+- Finished videos can be sent straight to UTubeFlow (free YouTube scheduler).
+
+## CodeLove network
+- [CodeLove](https://codelove.in)
+- [Free 3D Models](https://models.codelove.in)
+- [Free 3D Games](https://games.codelove.in)
+- [Insta Downloader](https://downloader.codelove.in)
+- [Link in Bio](https://linkinbio.codelove.in)
+- [Video to GIF](https://videotogif.codelove.in)
+- [Video to Images](https://videotoimages.codelove.in)
+- [Video Cut](https://videocut.codelove.in)
+- [Free YouTube Automation](https://utubeflow.codelove.in)
+- [Free Java Games](https://javaplay.codelove.in)

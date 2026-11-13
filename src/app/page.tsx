@@ -31,7 +31,8 @@ const FEATURES: Array<{ title: string; text: string }> = [
   { title: "Captions that follow the words", text: "Pop, karaoke, boxed or clean, in any colour, in the right script for each language. Also exported as .srt." },
   { title: "Actors that act", text: "Moods, gestures, who looks at whom, a camera that follows the speaker, and a reaction on the punch line." },
   { title: "Scenes and your own pictures", text: `${BACKGROUNDS.length} drawn sets — classroom, tea shop, office, beach — or upload a photo. Change the place mid-scene.` },
-  { title: "Music without claims", text: "Three built-in tracks generated in the browser, or your own audio file underneath the dialogue." },
+  { title: "Text-only videos", text: "No characters needed: big word-by-word captions on a plain colour screen, with the same AI voices, music and sound effects — for stories, facts and quotes." },
+  { title: "Music without claims", text: "Four built-in tracks made in the browser — smooth, funny, chill, suspense — or your own audio file under the voices, plus sound effects." },
   { title: "A writer when you need one", text: "Gemini drafts the dialogue in your language from a topic, and writes the YouTube title, description and tags." },
   { title: "Every shape", text: "9:16 for Shorts and Reels, 16:9 for YouTube, 1:1 for posts — at 30 or 60 frames per second." },
   { title: "Projects you can keep", text: "Your work is saved in the browser automatically; save a project file to move it or come back later." },
@@ -60,10 +61,10 @@ export default function Home() {
       <main>
         <section className="hero">
           <div className="wrap hero-center">
-            <p className="hero-kicker">Cartoon video maker for Tamil, Telugu, Hindi &amp; English</p>
+            <p className="hero-kicker">Free AI video maker by CodeLove · Tamil, Telugu, Hindi &amp; English</p>
             <h1 className="hero-title">Turn a script into a talking cartoon video.</h1>
             <p className="hero-sub">
-              Write the dialogue. {CHARACTERS.length} ready-made characters speak it with real voices, lip sync and word-by-word captions — exported as an MP4 for Shorts, Reels and YouTube.
+              Write the dialogue. {CHARACTERS.length} ready-made characters speak it with AI voices, lip sync, word-by-word captions and music — or go text-only with big captions on a plain screen. Exported as an MP4 for Shorts, Reels and YouTube.
             </p>
             <div className="hero-cta">
               <Link href="/editor/" className="btn btn-primary btn-lg">Start a video — free <ArrowRight size={17} /></Link>
