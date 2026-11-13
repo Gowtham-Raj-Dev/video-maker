@@ -20,7 +20,7 @@ import { clearVoices, loadKeys, loadProject, saveKeys, saveProject } from "@/eng
 import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline, type VideoMode } from "@/engine/types";
 import { recordVoices, type LineVoice } from "@/engine/voice";
 import { SITE } from "@/lib/site";
-import { UTUBEFLOW_URL, sendToUTubeFlow } from "@/lib/utubeflow";
+import { UTUBEFLOW_URL, isEmbeddedInUTubeFlow, linkToUTubeFlowParent, sendToUTubeFlow, sendToUTubeFlowParent } from "@/lib/utubeflow";
 
 type Tab = "script" | "cast" | "scene" | "captions" | "audio" | "key" | "export";
 type Status = { phase: "idle" } | { phase: "voice" | "video" | "writing"; note: string; share: number };
@@ -207,6 +207,13 @@ function Tracks({ timeline, time, onSeek, project, colorOf, characters }: {
 
 export function Editor() {
   const [project, setProject] = useState<Project>(() => defaultProject());
+  // Shown inside UTubeFlow's "Video Maker" page: no way out to our home page, videos go to its Ready to Post.
+  const [embedded, setEmbedded] = useState(false);
+  useEffect(() => {
+    if (!isEmbeddedInUTubeFlow()) return;
+    setEmbedded(true);
+    return linkToUTubeFlowParent();
+  }, []);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<Tab>("script");
   const [keysText, setKeysText] = useState("");
@@ -538,14 +545,15 @@ export function Editor() {
   const [flow, setFlow] = useState<{ state: "idle" | "opening" | "linked" | "done" | "error"; text: string }>({ state: "idle", text: "" });
   async function sendToFlow() {
     if (!video) return;
-    setFlow({ state: "opening", text: "Opening UTubeFlow… sign in there if it asks." });
+    setFlow({ state: "opening", text: embedded ? "Adding to Ready to Post…" : "Opening UTubeFlow… sign in there if it asks." });
     try {
-      const description = meta?.description ?? project.script.split("\n").filter((l) => l.includes(":")).map((l) => l.replace(/\s*\([^)]*\)\s*:/, ":").split("|").pop()!.trim()).join("\n");
-      const count = await sendToUTubeFlow(
-        { blob: video.blob, fileName: `${fileName}.${video.ext}`, title: meta?.title || project.title || "Cartoon video", description, kind: project.format === "9:16" ? "short" : "video" },
-        () => setFlow({ state: "linked", text: "Connected — sending the video…" }),
-      );
-      setFlow({ state: "done", text: count ? "Sent! It's in your UTubeFlow upload list — schedule it there." : "UTubeFlow got the message but no video. Try again." });
+      const description = meta?.description ?? project.script.split("\n").filter((l) => l.includes(":") && !l.trim().startsWith("[")).map((l) => l.replace(/\s*\([^)]*\)\s*:/, ":").split("|").pop()!.trim()).join("\n");
+      const send = { blob: video.blob, fileName: `${fileName}.${video.ext}`, title: meta?.title || project.title || "Cartoon video", description, kind: project.format === "9:16" ? "short" : "video" } as const;
+      const count = embedded
+        ? await sendToUTubeFlowParent(send)
+        : await sendToUTubeFlow(send, () => setFlow({ state: "linked", text: "Connected — sending the video…" }));
+      if (embedded) setFlow({ state: "done", text: count ? "Added to Ready to Post." : "UTubeFlow got the message but no video. Try again." });
+      else setFlow({ state: "done", text: count ? "Sent! It's in your UTubeFlow upload list — schedule it there." : "UTubeFlow got the message but no video. Try again." });
     } catch (e) {
       setFlow({ state: "error", text: messageOf(e) });
     }
@@ -568,10 +576,17 @@ export function Editor() {
   return (
     <div className="ed">
       <header className="ed-top">
-        <Link href="/" className="ed-brand" title="Back to the home page">
-          <Logo size={28} />
-          <span className="hidden md:inline">{SITE.name}</span>
-        </Link>
+        {embedded ? (
+          <span className="ed-brand">
+            <Logo size={28} />
+            <span className="hidden md:inline">{SITE.name}</span>
+          </span>
+        ) : (
+          <Link href="/" className="ed-brand" title="Back to the home page">
+            <Logo size={28} />
+            <span className="hidden md:inline">{SITE.name}</span>
+          </Link>
+        )}
         <span className="ed-divider" aria-hidden="true" />
         <div className="ed-title">
           <input aria-label="Video title (shown at the top of the video)" value={project.title} onChange={(e) => set("title", e.target.value)} placeholder="Untitled video" maxLength={80} spellCheck={false} />
@@ -957,10 +972,14 @@ export function Editor() {
                   <div className="flow-card">
                     <div>
                       <b>Upload &amp; schedule on YouTube</b>
-                      <p>Send this video to <a href={UTUBEFLOW_URL} target="_blank" rel="noopener noreferrer">UTubeFlow</a>, our free YouTube scheduler — no download needed. {meta ? "Your AI title and description go with it." : "Tip: make a title & tags first and they go with it."}</p>
+                      {embedded ? (
+                        <p>Add this video to Ready to Post and schedule it from there. {meta ? "Your AI title and description go with it." : "Tip: make a title & tags first and they go with it."}</p>
+                      ) : (
+                        <p>Send this video to <a href={UTUBEFLOW_URL} target="_blank" rel="noopener noreferrer">UTubeFlow</a>, our free YouTube scheduler — no download needed. {meta ? "Your AI title and description go with it." : "Tip: make a title & tags first and they go with it."}</p>
+                      )}
                     </div>
                     <button type="button" className="btn btn-primary" disabled={flow.state === "opening" || flow.state === "linked"} onClick={sendToFlow}>
-                      {flow.state === "opening" || flow.state === "linked" ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} Send to UTubeFlow
+                      {flow.state === "opening" || flow.state === "linked" ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} {embedded ? "Add to Ready to Post" : "Send to UTubeFlow"}
                     </button>
                     {flow.text && <p className={`note ${flow.state === "error" ? "note-error" : flow.state === "done" ? "note-ok" : "note-info"}`} style={{ margin: 0 }}>{flow.text}</p>}
                   </div>

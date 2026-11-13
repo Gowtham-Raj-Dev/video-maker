@@ -13,6 +13,68 @@
 
 export const UTUBEFLOW_URL = (process.env.NEXT_PUBLIC_UTUBEFLOW_URL || "https://utubeflow.codelove.in").replace(/\/$/, "");
 const UTUBEFLOW_ORIGIN = new URL(UTUBEFLOW_URL).origin;
+
+const isUTubeFlowOrigin = (origin: string) =>
+  origin === UTUBEFLOW_ORIGIN || origin === "https://utubeflow.codelove.in" || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
+/**
+ * Inside UTubeFlow: its "Video Maker" page shows the editor in a frame (/editor/?embed=utubeflow).
+ * Then a finished video goes straight to UTubeFlow's Ready to Post instead of opening a new tab.
+ *   Video Maker → UTubeFlow page: { type: "videomaker:ready" }
+ *   UTubeFlow page → Video Maker: { type: "utubeflow:init", theme }
+ *   Video Maker → UTubeFlow page: { type: "videomaker:clips", kind, clips }
+ *   UTubeFlow page → Video Maker: { type: "utubeflow:received", count }
+ */
+export const isEmbeddedInUTubeFlow = () =>
+  typeof window !== "undefined" && window.parent !== window && new URLSearchParams(window.location.search).get("embed") === "utubeflow";
+
+let parentOrigin: string | null = null;
+
+/** Says hello to UTubeFlow and learns its origin from its answer. Call once on mount; returns a cleanup. */
+export function linkToUTubeFlowParent(): () => void {
+  const onMessage = (e: MessageEvent) => {
+    if (e.source !== window.parent || !isUTubeFlowOrigin(e.origin)) return;
+    if ((e.data as { type?: string })?.type === "utubeflow:init") parentOrigin = e.origin;
+  };
+  window.addEventListener("message", onMessage);
+  // Nothing private in a hello; the parent answers only if it is UTubeFlow, and we check its origin.
+  window.parent.postMessage({ type: "videomaker:ready" }, "*");
+  return () => window.removeEventListener("message", onMessage);
+}
+
+/** Sends the video to the UTubeFlow page around us; resolves with how many videos it took. */
+export function sendToUTubeFlowParent(video: SendVideo): Promise<number> {
+  if (!parentOrigin) {
+    // Hello lost (slow load): ask again and give it a moment.
+    window.parent.postMessage({ type: "videomaker:ready" }, "*");
+  }
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const trySend = () => {
+      if (!parentOrigin) {
+        if (Date.now() - started > 8000) return reject(new Error("UTubeFlow didn't answer. Reload the page and try again."));
+        return void window.setTimeout(trySend, 300);
+      }
+      const origin = parentOrigin;
+      const timer = window.setTimeout(() => {
+        window.removeEventListener("message", onMessage);
+        reject(new Error("UTubeFlow didn't confirm. Try again."));
+      }, 60_000);
+      const onMessage = (e: MessageEvent) => {
+        if (e.source !== window.parent || e.origin !== origin) return;
+        const data = e.data as { type?: string; count?: unknown };
+        if (data?.type !== "utubeflow:received") return;
+        window.clearTimeout(timer);
+        window.removeEventListener("message", onMessage);
+        resolve(Number(data.count) || 0);
+      };
+      window.addEventListener("message", onMessage);
+      const clip = { name: video.fileName, type: video.blob.type || "video/mp4", blob: video.blob, title: video.title.slice(0, 100), description: video.description, index: 1 };
+      window.parent.postMessage({ type: "videomaker:clips", kind: video.kind, clips: [clip] }, origin);
+    };
+    trySend();
+  });
+}
 const TAB = "utubeflow";
 
 export interface SendVideo {
