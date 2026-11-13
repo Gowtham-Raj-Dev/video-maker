@@ -3,7 +3,9 @@ export type Arm = "down" | "hold" | "point" | "up" | "facepalm" | "clasp";
 export type Format = "9:16" | "16:9" | "1:1";
 export type SubtitleStyle = "pop" | "box" | "karaoke" | "clean" | "off";
 export type SubtitlePosition = "top" | "middle" | "bottom";
-export type MusicId = "none" | "funny" | "chill" | "suspense" | "custom";
+export type MusicId = "none" | "funny" | "chill" | "smooth" | "suspense" | "custom";
+/** "characters": cartoon people act the lines; "captions": no people, just big subtitles on a plain screen (or a scene). */
+export type VideoMode = "characters" | "captions";
 export type CameraStyle = "still" | "calm" | "dynamic";
 
 /** Things the visitor brought that don't fit in a saved project: they last until the page is closed. */
@@ -36,6 +38,9 @@ export interface CastMember {
 }
 
 export interface Project {
+  mode: VideoMode;
+  /** The screen's colour when the background is "plain". */
+  plainColor: string;
   script: string;
   cast: CastMember[];
   language: LanguageId;

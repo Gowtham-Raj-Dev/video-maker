@@ -171,6 +171,8 @@ Meena: हाँ, मैं पूरी क्लास में सोती 
 export function defaultProject(language: LanguageId = "tanglish"): Project {
   const sample = SAMPLES[language];
   return {
+    mode: "characters",
+    plainColor: "#111111",
     script: sample.script,
     cast: syncCast(parseScript(sample.script).lines, []),
     language,

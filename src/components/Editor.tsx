@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  AudioLines, Captions, Clapperboard, Download, FileText, FolderOpen, ImagePlus, KeyRound, Loader2, Mic, Music, Pause, Play, Plus, RefreshCw, Save, Sparkles, Square, Upload, Users, Volume2, X,
+  AudioLines, Captions, Check, Clapperboard, Download, FileText, FolderOpen, Image as ImageIcon, ImagePlus, KeyRound, Loader2, Mic, Music, Pause, Play, Plus, RefreshCw, Save, SkipBack, SkipForward, Sparkles, Square, Type, Upload, Users, Volume2, X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -17,7 +17,7 @@ import { canEncodeMp4, exportMp4, exportRecording, toSrt, type Quality } from "@
 import { checkKey, speak, splitKeys, withKeys, writeMeta, writeScript, type VideoMeta } from "@/engine/gemini";
 import { LANGUAGES, MOODS, SAMPLES, defaultProject, parseScript, syncCast } from "@/engine/script";
 import { clearVoices, loadKeys, loadProject, saveKeys, saveProject } from "@/engine/store";
-import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline } from "@/engine/types";
+import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline, type VideoMode } from "@/engine/types";
 import { recordVoices, type LineVoice } from "@/engine/voice";
 import { SITE } from "@/lib/site";
 import { UTUBEFLOW_URL, sendToUTubeFlow } from "@/lib/utubeflow";
@@ -25,21 +25,23 @@ import { UTUBEFLOW_URL, sendToUTubeFlow } from "@/lib/utubeflow";
 type Tab = "script" | "cast" | "scene" | "captions" | "audio" | "key" | "export";
 type Status = { phase: "idle" } | { phase: "voice" | "video" | "writing"; note: string; share: number };
 
-const TABS: Array<{ id: Tab; name: string; icon: ReactNode }> = [
-  { id: "script", name: "Script", icon: <FileText size={20} /> },
-  { id: "cast", name: "Cast", icon: <Users size={20} /> },
-  { id: "scene", name: "Scene", icon: <Clapperboard size={20} /> },
-  { id: "captions", name: "Captions", icon: <Captions size={20} /> },
-  { id: "audio", name: "Audio", icon: <Music size={20} /> },
-  { id: "key", name: "API key", icon: <KeyRound size={20} /> },
-  { id: "export", name: "Export", icon: <Download size={20} /> },
+const TABS: Array<{ id: Tab; name: string; title: string; desc: string; icon: ReactNode }> = [
+  { id: "script", name: "Script", title: "Script", desc: "Who says what. Every line becomes a moment in the video.", icon: <FileText size={20} /> },
+  { id: "cast", name: "Cast", title: "Cast & voices", desc: "A character and a voice for every name in the script.", icon: <Users size={20} /> },
+  { id: "scene", name: "Scene", title: "Scene", desc: "Video shape, background, camera and the words on screen.", icon: <Clapperboard size={20} /> },
+  { id: "captions", name: "Captions", title: "Captions", desc: "How the subtitles look and where they sit.", icon: <Captions size={20} /> },
+  { id: "audio", name: "Audio", title: "Audio", desc: "Background music, sound effects and voice recording.", icon: <Music size={20} /> },
+  { id: "key", name: "API key", title: "Gemini API key", desc: "Your free Google key gives the voices. It stays in this browser.", icon: <KeyRound size={20} /> },
+  { id: "export", name: "Export", title: "Export", desc: "Make the MP4, then download it or send it to YouTube.", icon: <Download size={20} /> },
 ];
 const FORMATS: Array<{ id: Format; name: string }> = [{ id: "9:16", name: "9:16 Shorts" }, { id: "16:9", name: "16:9 YouTube" }, { id: "1:1", name: "1:1 Post" }];
+const FORMATS_SHORT: Array<{ id: Format; name: string }> = [{ id: "9:16", name: "9:16" }, { id: "16:9", name: "16:9" }, { id: "1:1", name: "1:1" }];
+const PLAIN_COLORS: Array<[string, string]> = [["#111111", "Black"], ["#0f1b2d", "Navy"], ["#1d3a2a", "Forest"], ["#3b1f4a", "Plum"], ["#f6f4ef", "Paper"], ["#ffffff", "White"], ["#ffd84d", "Yellow"]];
 const SUB_STYLES: Array<{ id: SubtitleStyle; name: string }> = [{ id: "pop", name: "Pop" }, { id: "karaoke", name: "Karaoke" }, { id: "box", name: "Box" }, { id: "clean", name: "Clean" }, { id: "off", name: "Off" }];
 const SUB_POSITIONS: Array<{ id: SubtitlePosition; name: string }> = [{ id: "top", name: "Top" }, { id: "middle", name: "Middle" }, { id: "bottom", name: "Bottom" }];
 const CAMERAS: Array<{ id: CameraStyle; name: string }> = [{ id: "still", name: "Still" }, { id: "calm", name: "Calm" }, { id: "dynamic", name: "Follow speaker" }];
 const MUSIC: Array<Option<MusicId>> = [
-  { value: "funny", label: "Funny tiptoe", hint: "Bouncy pizzicato" }, { value: "chill", label: "Chill", hint: "Soft chords" }, { value: "suspense", label: "Suspense", hint: "Low drone, ticking" },
+  { value: "smooth", label: "Smooth", hint: "Soft piano, warm pads" }, { value: "funny", label: "Funny tiptoe", hint: "Bouncy pizzicato" }, { value: "chill", label: "Chill", hint: "Soft chords" }, { value: "suspense", label: "Suspense", hint: "Low drone, ticking" },
   { value: "custom", label: "Your own track", hint: "Upload an audio file" }, { value: "none", label: "No music" },
 ];
 const QUALITIES: Array<Option<Quality>> = [
@@ -89,6 +91,117 @@ function Switch({ checked, onChange, children }: { checked: boolean; onChange: (
       <span>{children}</span>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     </label>
+  );
+}
+
+/** The timeline: a time ruler, then one track each for the voices, the scenes and the music. Drag anywhere to scrub. */
+function Tracks({ timeline, time, onSeek, project, colorOf, characters }: {
+  timeline: Timeline; time: number; onSeek: (t: number) => void; project: Project; colorOf: (name: string) => string; characters: boolean;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const d = Math.max(timeline.duration, 0.01);
+  const pct = (t: number) => `${(Math.max(0, Math.min(d, t)) / d) * 100}%`;
+  const step = [1, 2, 5, 10, 15, 30, 60].find((s) => d / s <= 10) ?? 120;
+  const ticks: number[] = [];
+  for (let t = 0; t <= d + 1e-6; t += step) ticks.push(t);
+  const minor: number[] = [];
+  for (let t = 0; t <= d + 1e-6; t += step / 2) minor.push(t);
+
+  // Scenes: the chosen background, changed by "[bg: …]" lines (characters mode only).
+  const sceneName = (id: string) => (id === "plain" ? "Plain colour" : id === "custom" ? "Your picture" : BACKGROUNDS.find((b) => b.id === id)?.name ?? id);
+  const sceneSwatch = (id: string) => {
+    if (id === "plain") return project.plainColor;
+    const b = BACKGROUNDS.find((x) => x.id === id);
+    return b ? `linear-gradient(${b.swatch[0]} 0 60%, ${b.swatch[1]} 60%)` : "var(--surface-3)";
+  };
+  const scenes: Array<{ id: string; start: number; end: number }> = [];
+  let curBg = project.background;
+  let from = 0;
+  if (characters) {
+    timeline.spans.forEach((s, i) => {
+      if (!s.line.bg || s.line.bg === curBg) return;
+      if (i > 0) {
+        scenes.push({ id: curBg, start: from, end: s.start - 0.2 });
+        from = s.start - 0.2;
+      }
+      curBg = s.line.bg;
+    });
+  }
+  scenes.push({ id: curBg, start: from, end: d });
+  const musicName = MUSIC.find((m) => m.value === project.music)?.label ?? "";
+
+  const seekAt = (clientX: number) => {
+    const r = innerRef.current?.getBoundingClientRect();
+    if (r) onSeek(((clientX - r.left) / r.width) * d);
+  };
+
+  return (
+    <div className="tl2">
+      <div className="tl2-labels" aria-hidden="true">
+        <div className="tl2-corner" />
+        <div className="tl2-label"><Mic size={13} /> Voice</div>
+        <div className="tl2-label tl2-sm"><ImageIcon size={13} /> Scene</div>
+        <div className="tl2-label tl2-sm"><Music size={13} /> Music</div>
+      </div>
+      <div
+        className="tl2-area"
+        role="slider"
+        tabIndex={0}
+        aria-label="Timeline"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(d)}
+        aria-valuenow={Math.round(time)}
+        aria-valuetext={`${clock(time)} of ${clock(d)}`}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          seekAt(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          if (e.buttons & 1) seekAt(e.clientX);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight") { e.preventDefault(); onSeek(time + 1); }
+          if (e.key === "ArrowLeft") { e.preventDefault(); onSeek(time - 1); }
+        }}
+      >
+        <div className="tl2-inner" ref={innerRef}>
+          <div className="tl2-ruler">
+            {minor.map((t) => <i key={`m${t}`} style={{ left: pct(t) }} />)}
+            {ticks.map((t) => <span key={t} style={{ left: pct(t) }}>{clock(t)}</span>)}
+          </div>
+          <div className="tl2-lane">
+            {timeline.spans.map((s, i) => {
+              const c = colorOf(s.line.speaker);
+              const on = time >= s.start && time <= s.end;
+              return (
+                <div key={i} className="tl2-clip" data-on={on} title={`${s.line.speaker}: ${s.line.caption}`} style={{ left: pct(s.start), width: pct(s.end - s.start), borderColor: c, background: `color-mix(in srgb, ${c} ${on ? 34 : 20}%, white)` }}>
+                  <b>{s.line.speaker}</b>
+                  <span>{s.line.caption}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="tl2-lane tl2-sm">
+            {scenes.map((s, i) => (
+              <div key={i} className="tl2-bar" style={{ left: pct(s.start), width: pct(s.end - s.start) }}>
+                <i style={{ background: sceneSwatch(s.id) }} />
+                <span>{sceneName(s.id)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="tl2-lane tl2-sm">
+            {project.music === "none" ? (
+              <span className="tl2-empty">No music</span>
+            ) : (
+              <div className="tl2-bar tl2-music" style={{ left: 0, width: "100%", opacity: 0.45 + project.musicVolume * 0.55 }}>
+                <span>{musicName}{timeline.silent ? " · plays once voices are recorded" : ""}</span>
+              </div>
+            )}
+          </div>
+          <div className="tl2-head" style={{ left: pct(time) }}><b /></div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -155,6 +268,40 @@ export function Editor() {
   const set = <K extends keyof Project>(key: K, value: Project[K]) => setProject((p) => ({ ...p, [key]: value }));
   const setScript = (script: string) => setProject((p) => ({ ...p, script, cast: syncCast(parseScript(script).lines, p.cast) }));
   const setMember = (name: string, patch: Partial<CastMember>) => set("cast", project.cast.map((c) => (c.name === name ? { ...c, ...patch } : c)));
+
+  const characters = project.mode !== "captions";
+  /** Switching mode also picks the look that suits it; everything stays editable after. */
+  const setMode = (mode: VideoMode) =>
+    setProject((p) => {
+      if ((p.mode ?? "characters") === mode) return p;
+      return mode === "captions"
+        ? { ...p, mode, background: "plain", subtitlePosition: "middle", music: p.music === "funny" ? "smooth" : p.music }
+        : { ...p, mode, background: p.background === "plain" ? "room" : p.background, subtitlePosition: "top", music: p.music === "smooth" ? "funny" : p.music };
+    });
+
+  const currentIndex = timeline.spans.reduce((found, s, i) => (player.time >= s.start - 0.2 ? i : found), -1);
+  const currentSpan = currentIndex >= 0 ? timeline.spans[currentIndex] : null;
+  const jump = (dir: 1 | -1) => {
+    const spans = timeline.spans;
+    if (!spans.length) return;
+    const target = dir > 0 ? spans.find((s) => s.start > player.time + 0.05) : [...spans].reverse().find((s) => s.start < player.time - 0.4);
+    player.seek(target ? target.start + 0.02 : dir > 0 ? timeline.duration : 0);
+  };
+
+  // Space plays and pauses (when not typing).
+  const toggleRef = useRef(() => {});
+  toggleRef.current = () => (player.playing ? player.stop() : player.play());
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName) || el.closest("[role=listbox],[role=dialog]"))) return;
+      e.preventDefault();
+      toggleRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const needKey = () => {
     setError("Add your free Gemini API key first — it is what gives the characters their voices.");
@@ -396,12 +543,19 @@ export function Editor() {
   return (
     <div className="ed">
       <header className="ed-top">
-        <Link href="/" className="display" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", fontSize: 17 }} title="Back to the home page">
-          <Logo size={30} />
-          <span className="hidden sm:inline">{SITE.name}</span>
+        <Link href="/" className="ed-brand" title="Back to the home page">
+          <Logo size={28} />
+          <span className="hidden md:inline">{SITE.name}</span>
         </Link>
-        <span style={{ flex: 1 }} />
-        <span className={`pill ${voices ? "pill-ok" : "pill-warn"} hidden sm:inline-flex`}>
+        <span className="ed-divider" aria-hidden="true" />
+        <div className="ed-title">
+          <input aria-label="Video title (shown at the top of the video)" value={project.title} onChange={(e) => set("title", e.target.value)} placeholder="Untitled video" maxLength={80} spellCheck={false} />
+          <small className="hidden md:flex"><Check size={12} /> Saved in this browser · {parsed.lines.length} lines · {clock(timeline.duration)}</small>
+        </div>
+        <div className="ed-top-center hidden lg:flex">
+          <Seg label="Video shape" value={project.format} onChange={(v) => set("format", v)} items={FORMATS_SHORT} />
+        </div>
+        <span className={`pill ${voices ? "pill-ok" : "pill-warn"} hidden xl:inline-flex`}>
           {voices ? <><Volume2 size={14} /> Voice ready</> : <><Mic size={14} /> Silent draft</>}
         </span>
         <button type="button" className={`btn ${voices ? "" : "btn-teal"}`} disabled={busy} onClick={() => generateVoice(Boolean(voices))} title={voices ? "Record the voices again" : "Record the characters' voices with your Gemini key"}>
@@ -444,9 +598,35 @@ export function Editor() {
         </nav>
 
         <section className="ed-panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.name}>
+          {(() => {
+            const info = TABS.find((t) => t.id === tab)!;
+            return (
+              <div className="ed-panel-head">
+                <span className="ed-panel-icon" aria-hidden="true">{info.icon}</span>
+                <div>
+                  <h2>{info.id === "cast" && !characters ? "Voices" : info.title}</h2>
+                  <p>{info.id === "cast" && !characters ? "A voice for every name in the script." : info.desc}</p>
+                </div>
+              </div>
+            );
+          })()}
           {tab === "script" && (
             <div className="grid gap-4">
-              <h2>Script</h2>
+              <div>
+                <span className="lbl">Video type</span>
+                <div className="mode-pick" role="radiogroup" aria-label="Video type">
+                  {([
+                    ["characters", <Users key="i" size={18} />, "With characters", "Cartoon people act it out"],
+                    ["captions", <Type key="i" size={18} />, "Text only", "Plain screen, big subtitles"],
+                  ] as Array<[VideoMode, ReactNode, string, string]>).map(([id, icon, name, desc]) => (
+                    <button key={id} type="button" role="radio" aria-checked={(project.mode ?? "characters") === id} onClick={() => setMode(id)}>
+                      <span className="mode-icon">{icon}</span>
+                      <b>{name}</b>
+                      <small>{desc}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Field label="Language" hint={language.hint}>
                 <Select<LanguageId> ariaLabel="Language" value={project.language} onChange={(v) => set("language", v)} options={LANGUAGES.map((l) => ({ value: l.id, label: l.name, hint: l.native }))} />
               </Field>
@@ -498,22 +678,24 @@ export function Editor() {
 
           {tab === "cast" && (
             <div className="grid gap-4">
-              <h2>Cast</h2>
               {project.cast.length === 0 && <p className="hint">Names from your script appear here.</p>}
               {project.cast.map((member) => (
                 <div key={member.name} className="card grid gap-2 p-3" style={{ background: "var(--surface-2)", borderLeft: `3px solid ${speakerColor(member.name)}` }}>
                   <div className="flex items-center gap-3">
-                    <Avatar id={member.characterId} size={52} />
+                    {characters ? <Avatar id={member.characterId} size={52} /> : <span className="voice-dot" style={{ background: speakerColor(member.name) }}><Mic size={18} /></span>}
                     <strong className="display" style={{ fontSize: 16, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{member.name}</strong>
                     <button type="button" className="btn btn-sm" disabled={busy || testing !== ""} onClick={() => testVoice(member)} title="Hear this voice say one line (uses one request of your key)">
                       {testing === member.name ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />} Test voice
                     </button>
                   </div>
-                  <Select<string> ariaLabel={`Character for ${member.name}`} search value={member.characterId} onChange={(id) => setMember(member.name, { characterId: id, voice: characterById(id).voice })} options={characterOptions} leading={<Users size={16} style={{ opacity: 0.6, flex: "none" }} />} />
+                  {characters && <Select<string> ariaLabel={`Character for ${member.name}`} search value={member.characterId} onChange={(id) => setMember(member.name, { characterId: id, voice: characterById(id).voice })} options={characterOptions} leading={<Users size={16} style={{ opacity: 0.6, flex: "none" }} />} />}
                   <Select<string> ariaLabel={`Voice for ${member.name}`} search value={member.voice} onChange={(v) => setMember(member.name, { voice: v })} options={voiceOptions} leading={<AudioLines size={16} style={{ opacity: 0.6, flex: "none" }} />} />
                 </div>
               ))}
-              <div>
+              {!characters && (
+                <p className="note note-info">Text-only video: no people on screen. Each name only picks a voice — write lines without a name and they go to the last speaker (or “Narrator”).</p>
+              )}
+              {characters && <div>
                 <h3 className="display" style={{ fontSize: 16, marginBottom: 4 }}>Character library · {CHARACTERS.length}</h3>
                 <p className="hint" style={{ marginBottom: 10 }}>Tap a character to give them a line in the script.</p>
                 <div className="own-mini">
@@ -539,17 +721,19 @@ export function Editor() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           )}
 
           {tab === "scene" && (
             <div className="grid gap-4">
-              <h2>Scene</h2>
               <Field label="Video shape"><Seg label="Video shape" value={project.format} onChange={(v) => set("format", v)} items={FORMATS} /></Field>
               <div>
                 <span className="lbl">Background</span>
                 <div className="grid grid-cols-4 gap-2">
+                  <button type="button" className="swatch" aria-pressed={project.background === "plain"} title="A plain colour screen" onClick={() => set("background", "plain")} style={{ background: project.plainColor }}>
+                    <span>Plain colour</span>
+                  </button>
                   {BACKGROUNDS.map((b) => (
                     <button key={b.id} type="button" className="swatch" aria-pressed={project.background === b.id} aria-label={b.name} title={b.name} onClick={() => set("background", b.id)} style={{ background: `linear-gradient(${b.swatch[0]} 0 66%, ${b.swatch[1]} 66%)` }}>
                       <span>{b.name}</span>
@@ -561,17 +745,26 @@ export function Editor() {
                   </button>
                 </div>
                 <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={(e) => { void pickBackground(e.target.files?.[0]); e.target.value = ""; }} />
+                {project.background === "plain" && (
+                  <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 10 }}>
+                    {PLAIN_COLORS.map(([c, name]) => (
+                      <button key={c} type="button" className="dot" aria-pressed={project.plainColor === c} aria-label={`${name} screen`} title={name} style={{ background: c }} onClick={() => set("plainColor", c)} />
+                    ))}
+                    <input type="color" aria-label="Custom screen colour" value={project.plainColor} onChange={(e) => set("plainColor", e.target.value)} style={{ width: 34, height: 30, padding: 0, border: "1px solid var(--line-2)", borderRadius: 8, background: "none", cursor: "pointer" }} />
+                  </div>
+                )}
+                {!characters && project.background !== "plain" && <p className="hint" style={{ marginTop: 6 }}>Text-only videos dim the picture so the words stand out. <code>[bg: …]</code> lines in the script are used only with characters.</p>}
                 {assets.bgImage && (
                   <p className="hint" style={{ marginTop: 6 }}>
                     {assetNames.bg} · <button type="button" onClick={() => bgFileRef.current?.click()} style={{ background: "none", border: 0, color: "var(--accent-strong)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>change picture</button>
                   </p>
                 )}
               </div>
-              <Field label="Camera"><Seg label="Camera" value={project.camera} onChange={(v) => set("camera", v)} items={CAMERAS} /></Field>
-              <div>
+              {characters && <Field label="Camera"><Seg label="Camera" value={project.camera} onChange={(v) => set("camera", v)} items={CAMERAS} /></Field>}
+              {characters && <div>
                 <label className="lbl" htmlFor="char-size">Character size · {Math.round(project.charScale * 100)}%</label>
                 <input id="char-size" type="range" min={0.7} max={1.25} step={0.05} value={project.charScale} onChange={(e) => set("charScale", Number(e.target.value))} />
-              </div>
+              </div>}
               <div>
                 <label className="lbl" htmlFor="title">Title on the video</label>
                 <input id="title" className="field" value={project.title} onChange={(e) => set("title", e.target.value)} placeholder="Wait for the last line 😂" maxLength={80} />
@@ -585,8 +778,8 @@ export function Editor() {
                 <input id="endcard" className="field" value={project.endCard} onChange={(e) => set("endCard", e.target.value)} placeholder="Follow for more 😂" maxLength={40} />
               </div>
               <div className="grid">
-                <Switch checked={project.showNames} onChange={(v) => set("showNames", v)}>Name tags under characters</Switch>
-                <Switch checked={project.punch} onChange={(v) => set("punch", v)}>Punch-line ending (zoom, laughs, reaction)</Switch>
+                {characters && <Switch checked={project.showNames} onChange={(v) => set("showNames", v)}>Name tags under characters</Switch>}
+                <Switch checked={project.punch} onChange={(v) => set("punch", v)}>{characters ? "Punch-line ending (zoom, laughs, reaction)" : "Punch-line ending (bigger last line, ba-dum-tss)"}</Switch>
                 <Switch checked={project.progressBar} onChange={(v) => set("progressBar", v)}>Progress bar at the bottom</Switch>
               </div>
             </div>
@@ -594,7 +787,6 @@ export function Editor() {
 
           {tab === "captions" && (
             <div className="grid gap-4">
-              <h2>Captions</h2>
               <Field label="Style"><Seg label="Caption style" value={project.subtitleStyle} onChange={(v) => set("subtitleStyle", v)} items={SUB_STYLES} /></Field>
               <Field label="Position"><Seg label="Caption position" value={project.subtitlePosition} onChange={(v) => set("subtitlePosition", v)} items={SUB_POSITIONS} /></Field>
               <div>
@@ -617,7 +809,6 @@ export function Editor() {
 
           {tab === "audio" && (
             <div className="grid gap-4">
-              <h2>Audio</h2>
               <Field label="Music">
                 <Select<MusicId> ariaLabel="Music" value={project.music} onChange={(v) => (v === "custom" && !assets.music ? musicFileRef.current?.click() : set("music", v))} options={MUSIC} leading={<Music size={16} style={{ opacity: 0.6, flex: "none" }} />} />
               </Field>
@@ -644,7 +835,6 @@ export function Editor() {
 
           {tab === "key" && (
             <div className="grid gap-4">
-              <h2>Gemini API key</h2>
               <p style={{ color: "var(--muted)" }}>
                 The voices are made by Google&apos;s Gemini with <b style={{ color: "var(--fg)" }}>your own free key</b>. It takes a minute and needs no card.
               </p>
@@ -664,7 +854,6 @@ export function Editor() {
 
           {tab === "export" && (
             <div className="grid gap-4">
-              <h2>Export</h2>
               <Field label="Quality"><Select<Quality> ariaLabel="Video quality" value={quality} onChange={setQuality} options={QUALITIES} /></Field>
               <Field label="Frames per second"><Seg label="Frames per second" value={fps} onChange={setFps} items={[{ id: 30, name: "30 fps" }, { id: 60, name: "60 fps (smoother)" }]} /></Field>
               <button type="button" className="btn btn-primary btn-lg" disabled={busy} onClick={() => exportVideo(false)}>
@@ -724,74 +913,66 @@ export function Editor() {
         </section>
 
         <main className="ed-main">
-          <div className="ed-cast" aria-label="Characters in this video">
-            <span className="lbl" style={{ margin: 0, whiteSpace: "nowrap" }}>In this video</span>
+          <div className="ed-cast" aria-label={characters ? "Characters in this video" : "Voices in this video"}>
+            <span className="ed-cast-lbl">{characters ? "Cast" : "Voices"}</span>
             {project.cast.map((m) => (
-              <button key={m.name} type="button" className="cast-chip" onClick={() => setTab("cast")} title={`${m.name}: change character or voice`} style={{ borderColor: speakerColor(m.name) }}>
-                <Avatar id={m.characterId} size={34} />
+              <button key={m.name} type="button" className="cast-chip" onClick={() => setTab("cast")} title={`${m.name}: change ${characters ? "character or " : ""}voice`}>
+                {characters ? <Avatar id={m.characterId} size={30} /> : <span className="cast-dot" style={{ background: speakerColor(m.name) }} />}
                 <span>
                   <b>{m.name}</b>
-                  <small>{characterById(m.characterId).name} · 🎙 {m.voice}</small>
+                  <small>{characters ? `${characterById(m.characterId).name} · ` : ""}{m.voice}</small>
                 </span>
               </button>
             ))}
             {project.cast.length === 0 && <span className="hint">Write a line in the script to add someone.</span>}
-            <button type="button" className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => setTab("cast")}>
-              <Users size={14} /> All {CHARACTERS.length} characters
-            </button>
+            <span className="ed-cast-mode" title="Video type">
+              {characters ? <Users size={13} /> : <Type size={13} />} {characters ? "With characters" : "Text only"}
+            </span>
           </div>
           <div className="ed-stage">
             <canvas ref={player.canvasRef} width={player.width} height={player.height} onClick={playOrVoice} role="img" aria-label="Video preview. Press to play or pause." />
             {!voices && !busy && !player.playing && !draftOk && parsed.lines.length > 0 && (
-              <div className="voice-gate">
-                <span className="voice-gate-icon" aria-hidden="true"><Volume2 size={26} /></span>
-                <strong>No voice yet</strong>
-                <p>
-                  {keys.length
-                    ? "Press play: the characters' voices are recorded with your Gemini key, then the video plays with sound."
-                    : "The characters speak with Google Gemini voices. Add your free Gemini API key to hear them."}
-                </p>
-                <button type="button" className="btn btn-primary btn-lg" onClick={playOrVoice}>
-                  {keys.length ? <><Play size={18} /> Play with voice</> : <><KeyRound size={18} /> Add Gemini key</>}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDraftOk(true); player.play(); }}>or watch the silent draft</button>
+              <div className="voice-gate" role="note">
+                <span className="voice-gate-icon" aria-hidden="true"><Volume2 size={20} /></span>
+                <div className="voice-gate-text">
+                  <strong>No voice yet</strong>
+                  <p>
+                    {keys.length
+                      ? "Press play: voices are recorded with your Gemini key, then it plays with music and sound."
+                      : "Voices come from Google Gemini. Add your free API key to hear them."}
+                  </p>
+                </div>
+                <div className="voice-gate-actions">
+                  <button type="button" className="btn btn-accent" onClick={playOrVoice}>
+                    {keys.length ? <><Play size={16} /> Play with voice</> : <><KeyRound size={16} /> Add Gemini key</>}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setDraftOk(true); player.play(); }}>Silent draft</button>
+                </div>
               </div>
             )}
           </div>
           <div className="ed-transport">
-            <button type="button" className="btn btn-icon" onClick={playOrVoice} aria-label={player.playing ? "Pause" : "Play"}>
-              {player.playing ? <Pause size={18} /> : <Play size={18} />}
-            </button>
-            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap" }}>
-              {clock(player.time)} <span style={{ color: "var(--subtle)" }}>/ {clock(timeline.duration)}</span>
+            <span className="tp-time">
+              {clock(player.time)} <span>/ {clock(timeline.duration)}</span>
             </span>
-            <input type="range" min={0} max={timeline.duration} step={0.01} value={Math.min(player.time, timeline.duration)} onChange={(e) => player.seek(Number(e.target.value))} aria-label="Seek" />
-          </div>
-          <div
-            className="tl"
-            aria-label="Timeline: one block per line"
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              player.seek(((e.clientX - r.left) / r.width) * timeline.duration);
-            }}
-          >
-            {timeline.spans.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                className="tl-block"
-                title={`${s.line.speaker}: ${s.line.caption}`}
-                style={{ left: `${(s.start / timeline.duration) * 100}%`, width: `${((s.end - s.start) / timeline.duration) * 100}%`, background: speakerColor(s.line.speaker), opacity: player.time >= s.start && player.time <= s.end ? 1 : 0.72 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  player.seek(s.start + 0.02);
-                }}
-              >
-                {s.line.speaker}
+            <div className="tp-ctrls">
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => jump(-1)} aria-label="Previous line" title="Previous line"><SkipBack size={17} /></button>
+              <button type="button" className="tp-play" onClick={playOrVoice} aria-label={player.playing ? "Pause" : "Play"} title="Play / pause (Space)">
+                {player.playing ? <Pause size={19} /> : <Play size={19} style={{ marginLeft: 2 }} />}
               </button>
-            ))}
-            <div className="tl-head" style={{ left: `${(Math.min(player.time, timeline.duration) / timeline.duration) * 100}%` }} />
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => jump(1)} aria-label="Next line" title="Next line"><SkipForward size={17} /></button>
+            </div>
+            <div className="tp-now" aria-live="off">
+              {currentSpan && (
+                <>
+                  <i style={{ background: speakerColor(currentSpan.line.speaker) }} />
+                  <b>{currentSpan.line.speaker}</b>
+                  <span>{currentSpan.line.caption}</span>
+                </>
+              )}
+            </div>
           </div>
+          <Tracks timeline={timeline} time={player.time} onSeek={player.seek} project={project} colorOf={speakerColor} characters={characters} />
         </main>
       </div>
     </div>

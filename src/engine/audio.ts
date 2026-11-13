@@ -229,6 +229,24 @@ export function makeMusic(id: MusicId, seconds: number): Float32Array {
       pad(out, b * bar, bar + 0.5, chord, 0.2);
       for (let k = 0; k < 4; k++) pluck(out, b * bar + k * (bar / 4) + bar / 8, chord[(k * 3) % 4] + 12, 0.1, 4);
     }
+  } else if (id === "smooth") {
+    // Slow, warm and even: soft pads, a gentle electric-piano broken chord and a round bass. Sits under a voice without fighting it.
+    const bar = (60 / 72) * 4;
+    const chords = [[48, 55, 59, 64], [45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 55, 59]];
+    const arp = [0, 1.5, 2, 3];
+    for (let b = 0; b * bar < seconds; b++) {
+      const chord = chords[b % chords.length];
+      pad(out, b * bar, bar + 0.8, chord.map((n) => n + 12), 0.11);
+      pluck(out, b * bar, chord[0] - 12, 0.2, 2.2);
+      pluck(out, b * bar + bar * 0.625, chord[0] - 12, 0.1, 2.6);
+      arp.forEach((beat, k) => pluck(out, b * bar + beat * (bar / 4), chord[(k + 1) % 4] + 12, 0.06 + (k === 0 ? 0.02 : 0), 3));
+    }
+    // A gentle one-pole low-pass takes the edge off the plucks.
+    let y = 0;
+    for (let i = 0; i < out.length; i++) {
+      y += 0.18 * (out[i] - y);
+      out[i] = y * 1.4;
+    }
   } else if (id === "suspense") {
     for (let at = 0; at < seconds; at += 4) pad(out, at, 4.6, [38, 45, 50], 0.34);
     for (let i = 0; i * 0.5 < seconds; i++) pluck(out, i * 0.5, i % 2 ? 77 : 84, 0.05, 30);
@@ -251,6 +269,22 @@ function pop(out: Float32Array, at: number, gain: number) {
     const k = i / len;
     phase += (2 * Math.PI * (500 + 700 * k)) / MIX_RATE;
     out[start + i] += gain * Math.sin(phase) * (1 - k) ** 2;
+  }
+}
+
+/** A soft air "whoosh" as a new caption slides in (text-only videos). */
+function whoosh(out: Float32Array, at: number, gain: number, seed = 777) {
+  const start = Math.max(0, Math.round(at * MIX_RATE));
+  const len = Math.round(MIX_RATE * 0.32);
+  let y = 0;
+  for (let i = 0; i < len && start + i < out.length; i++) {
+    const k = i / len;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const noise = seed / 0x3fffffff - 1;
+    // The filter opens then closes: the sound rises and passes by.
+    const a = 0.02 + 0.22 * Math.sin(Math.PI * k);
+    y += a * (noise - y);
+    out[start + i] += gain * y * Math.sin(Math.PI * k) ** 1.5 * 3;
   }
 }
 
@@ -333,7 +367,8 @@ export function buildTimeline(lines: Line[], project: Project, voices: Array<{ s
   }
   spans.forEach((span, i) => resampleInto(audio, span.start, voices[i].samples, voices[i].rate, 0.95));
   if (project.sfx) {
-    spans.forEach((span, i) => i && pop(audio, span.start - 0.06, 0.1));
+    if (project.mode === "captions") spans.forEach((span, i) => whoosh(audio, span.start - 0.22, 0.12, 777 + i * 31));
+    else spans.forEach((span, i) => i && pop(audio, span.start - 0.06, 0.1));
     if (project.punch && spans.length > 1) rimshot(audio, spans[spans.length - 1].end + 0.15, 0.3);
   }
   // A soft limiter, so music and voice together never clip.

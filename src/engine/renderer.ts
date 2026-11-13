@@ -100,6 +100,8 @@ function stagingOf(timeline: Timeline, spread: number): Seat[][] {
   return staging;
 }
 
+const PAD = 600;
+
 const sample = (values: Float32Array, seconds: number) => values[Math.max(0, Math.min(values.length - 1, Math.round(seconds * ENVELOPE_RATE)))] ?? 0;
 
 /** One frame of the video at time `t`, on a context already scaled to the frame's W × H. */
@@ -112,7 +114,12 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
   ctx.rect(0, 0, W, H);
   ctx.clip();
   if (!spans.length) {
-    drawBackground(ctx, project.background, { W, H, floor, u: L.cs / 0.72, t }, assets);
+    drawBackground(ctx, project, project.background, { W, H, floor, u: L.cs / 0.72, t }, assets);
+    ctx.restore();
+    return;
+  }
+  if (project.mode === "captions") {
+    drawCaptionsFrame(ctx, L, project, timeline, t, assets);
     ctx.restore();
     return;
   }
@@ -152,7 +159,7 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
   ctx.translate(W / 2, floor - 320 * u);
   ctx.scale(zoom, zoom);
   ctx.translate(-focusX, -(floor - 320 * u));
-  drawBackground(ctx, bg, { W, H, floor, u, t }, assets);
+  drawBackground(ctx, project, bg, { W, H, floor, u, t }, assets);
 
   const speakerSeat = seats.find((s) => s.name === span.line.speaker);
   const speakerMood = moodOf(span.line, punch && cur === lastIndex);
@@ -224,9 +231,58 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
     }
   }
 
+  drawOverlays(ctx, L, project, timeline, cur, t, {});
+  ctx.restore();
+}
+
+/** Text only: no people — the screen, big subtitles, and who is speaking. */
+function drawCaptionsFrame(ctx: Ctx, L: Layout, project: Project, timeline: Timeline, t: number, assets: Assets | null) {
+  const { W, H, floor } = L;
+  const spans = timeline.spans;
+  let cur = 0;
+  for (let i = 0; i < spans.length; i++) if (t >= spans[i].start - 0.2) cur = i;
+  const u = L.cs / 0.72;
+  const plain = project.background === "plain";
+  drawBackground(ctx, project, project.background, { W, H, floor, u, t }, assets);
+  if (!plain) {
+    // A picture behind words: dim it so the words read.
+    ctx.fillStyle = "rgba(10,10,14,0.42)";
+    ctx.fillRect(0, 0, W, H);
+  }
+  const speakers = new Set(spans.map((s) => s.line.speaker));
+  drawOverlays(ctx, L, project, timeline, cur, t, {
+    scale: 1.3,
+    speaker: speakers.size > 1 ? spans[cur].line.speaker : undefined,
+    light: plain && isLight(project.plainColor),
+  });
+}
+
+/** Relative brightness of a #rrggbb colour, 0–1. */
+function isLight(hex: string) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex ?? "");
+  if (!m) return false;
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6;
+}
+
+interface SubOptions {
+  /** Bigger words (text-only videos). */
+  scale?: number;
+  /** A name shown above the words. */
+  speaker?: string;
+  /** Dark words on a light screen. */
+  light?: boolean;
+}
+
+/** Subtitle, end card, progress bar, title and channel name: the same in every mode. */
+function drawOverlays(ctx: Ctx, L: Layout, project: Project, timeline: Timeline, cur: number, t: number, sub: SubOptions) {
+  const { W, H } = L;
+  const spans = timeline.spans;
+  const lastIndex = spans.length - 1;
+  const u = L.cs / 0.72;
   const endAt = spans[lastIndex].end + 0.7;
   const ending = Boolean(project.endCard?.trim()) && t > endAt;
-  if (project.subtitleStyle !== "off" && !ending) drawSubtitle(ctx, L, project, spans, cur, t);
+  if (project.subtitleStyle !== "off" && !ending) drawSubtitle(ctx, L, project, spans, cur, t, sub);
   if (ending) {
     const pop = easeOutBack((t - endAt) / 0.3);
     ctx.save();
@@ -249,7 +305,6 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
     label(ctx, project.handle.trim(), W / 2, H - 34 * u - (project.format === "9:16" ? 30 : 0), 30 * u, "#fff", 7 * u, 700);
     ctx.restore();
   }
-  ctx.restore();
 }
 
 function nameTag(ctx: Ctx, name: string, x: number, y: number, size: number, active: boolean) {
@@ -259,7 +314,23 @@ function nameTag(ctx: Ctx, name: string, x: number, y: number, size: number, act
   label(ctx, name, x, y + size * 0.04, size, INK);
 }
 
-function drawBackground(ctx: Ctx, id: string, stage: { W: number; H: number; floor: number; u: number; t: number }, assets: Assets | null) {
+function drawBackground(ctx: Ctx, project: Project, id: string, stage: { W: number; H: number; floor: number; u: number; t: number }, assets: Assets | null) {
+  if (id === "plain") {
+    // A blank screen in one colour, with a faint light drifting slowly across it so it never looks frozen.
+    const { W, H, t } = stage;
+    const color = project.plainColor || "#111111";
+    ctx.fillStyle = color;
+    ctx.fillRect(-PAD, -PAD, W + PAD * 2, H + PAD * 2);
+    const x = W * (0.5 + 0.25 * Math.sin(t * 0.21));
+    const y = H * (0.42 + 0.18 * Math.cos(t * 0.17));
+    const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(W, H) * 0.7);
+    const light = isLight(color);
+    g.addColorStop(0, light ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.09)");
+    g.addColorStop(1, light ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.22)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-PAD, -PAD, W + PAD * 2, H + PAD * 2);
+    return;
+  }
   if (id === "custom" && assets?.bgImage) {
     // The visitor's own picture, filling the frame (and a margin, for when the camera moves).
     const [iw, ih] = assets.bgSize;
@@ -318,16 +389,18 @@ function wrap(ctx: Ctx, words: string[], size: number, max: number): Array<{ wor
   return rows;
 }
 
-function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur: number, t: number) {
+function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur: number, t: number, sub: SubOptions = {}) {
   const span = spans[cur];
   const words = (project.upper ? span.line.caption.toUpperCase() : span.line.caption).split(/\s+/).filter(Boolean);
   const hot = project.highlight ?? "#FFD166";
   if (!words.length || t < span.start - 0.15) return;
   const style = project.subtitleStyle;
+  const light = Boolean(sub.light);
   const max = L.W * 0.86;
-  let size = L.subSize * project.subtitleSize * (project.punch && cur === spans.length - 1 && spans.length > 1 ? 1.08 : 1);
+  const maxRows = sub.scale ? 5 : 3;
+  let size = L.subSize * project.subtitleSize * (sub.scale ?? 1) * (project.punch && cur === spans.length - 1 && spans.length > 1 ? 1.08 : 1);
   let rows = wrap(ctx, words, size, max);
-  for (let k = 0; k < 4 && rows.length > 3; k++) {
+  for (let k = 0; k < 5 && rows.length > maxRows; k++) {
     size *= 0.86;
     rows = wrap(ctx, words, size, max);
   }
@@ -361,9 +434,18 @@ function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur:
   ctx.globalAlpha = clamp01((t - (span.start - 0.15)) / 0.1);
   ctx.translate(-L.W / 2, -(top + blockH / 2));
 
+  if (sub.speaker) {
+    // Who is speaking, in a small tag above the words.
+    const ns = size * 0.5;
+    ctx.font = `800 ${ns}px ${FONT}`;
+    const nw = ctx.measureText(sub.speaker).width + ns * 1.4;
+    const ny = top - size * (style === "box" ? 0.75 : 0.45) - ns;
+    blob(ctx, hot, () => ctx.roundRect(L.W / 2 - nw / 2, ny - ns * 0.8, nw, ns * 1.6, ns * 0.8), 0);
+    label(ctx, sub.speaker, L.W / 2, ny + ns * 0.04, ns, INK);
+  }
   if (style === "box") {
     const bw = Math.max(...rows.map((r) => r.width)) + size * 1.1;
-    blob(ctx, "rgba(30,27,46,0.88)", () => ctx.roundRect(L.W / 2 - bw / 2, top - size * 0.3, bw, blockH + size * 0.6, size * 0.5), 0);
+    blob(ctx, light ? "rgba(255,255,255,0.92)" : "rgba(30,27,46,0.88)", () => ctx.roundRect(L.W / 2 - bw / 2, top - size * 0.3, bw, blockH + size * 0.6, size * 0.5), 0);
   }
   ctx.font = `800 ${size}px ${FONT}`;
   ctx.textAlign = "center";
@@ -388,6 +470,22 @@ function drawSubtitle(ctx: Ctx, L: Layout, project: Project, spans: Span[], cur:
       if (isActive && style !== "clean") {
         ctx.translate(0, -size * 0.05);
         ctx.scale(1.1, 1.1);
+      }
+      if (light) {
+        // Dark words on a light screen; the highlight becomes a marker behind the word.
+        const marked = style === "karaoke" ? spoken || isActive : isActive && style !== "clean";
+        if (marked) {
+          ctx.fillStyle = hot;
+          ctx.beginPath();
+          ctx.roundRect(-word.w / 2 - size * 0.14, -size * 0.58, word.w + size * 0.28, size * 1.12, size * 0.22);
+          ctx.fill();
+        }
+        ctx.globalAlpha *= style === "karaoke" && !marked ? 0.55 : 1;
+        ctx.fillStyle = INK;
+        ctx.fillText(word.text, 0, 0);
+        ctx.restore();
+        x += word.w + space;
+        continue;
       }
       if (style !== "box") {
         ctx.strokeStyle = INK;
