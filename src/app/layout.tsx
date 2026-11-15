@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+// Baloo 2 / Thambi 2 / Tammudu 2 and Instrument Sans / Serif, self-hosted from public/fonts under their own
+// names: the video renderer (src/engine/draw.ts) and the editor draw with these names, so next/font is not used.
+import "./google-fonts.css";
 import "./globals.css";
 import { Analytics } from "@/components/Analytics";
-import { FAQ, SITE } from "@/lib/site";
+import { SITE } from "@/lib/site";
 
 export const viewport: Viewport = { themeColor: "#F6F4EF", width: "device-width", initialScale: 1 };
 
@@ -35,18 +38,37 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: SITE.title, description: SITE.description, images: ["/og.png"] },
 };
 
+const PERSON_ID = "https://gowtham.codelove.in/#person";
+const ORG_ID = "https://codelove.in/#organization";
+
+// Site-wide graph. The FAQPage lives on the home page only (src/app/page.tsx), where the questions are visible.
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      "@type": "Person",
+      "@id": PERSON_ID,
+      name: SITE.creator,
+      alternateName: ["Gowthamraj", "Gowtham Raj"],
+      url: "https://gowtham.codelove.in",
+    },
+    {
+      "@type": "Organization",
+      "@id": ORG_ID,
+      name: SITE.brand,
+      url: "https://codelove.in",
+      founder: { "@id": PERSON_ID },
+    },
+    {
       "@type": "WebSite",
       "@id": `${SITE.url}/#website`,
-      url: SITE.url,
+      url: `${SITE.url}/`,
       name: SITE.fullName,
       alternateName: ["Video Maker by CodeLove", "Free AI Video Maker"],
       description: SITE.longDescription,
       inLanguage: "en",
-      publisher: { "@id": "https://codelove.in/#organization" },
+      creator: { "@id": PERSON_ID },
+      publisher: { "@id": ORG_ID },
     },
     {
       "@type": "WebApplication",
@@ -62,18 +84,14 @@ const jsonLd = {
       browserRequirements: "Requires a modern browser (Chrome, Edge, Firefox or Safari)",
       isAccessibleForFree: true,
       offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
-      creator: { "@id": "https://gowtham.codelove.in/#person" },
-      publisher: { "@id": "https://codelove.in/#organization" },
+      creator: { "@id": PERSON_ID },
+      publisher: { "@id": ORG_ID },
+      isPartOf: { "@id": `${SITE.url}/#website` },
       featureList: [
         "Script to video with AI voices", "66 cartoon characters in two styles", "Lip sync from the real voice", "Text-only videos with big captions",
         "Tamil, Tanglish, Telugu, Hindi, Hinglish, English", "Word-by-word subtitles and .srt export", "Background music and sound effects",
         "17 backgrounds or your own picture", "MP4 export up to 4K, 30 or 60 fps", "AI script, title and tag writer", "No watermark, no sign-up",
       ],
-    },
-    {
-      "@type": "FAQPage",
-      "@id": `${SITE.url}/#faq`,
-      mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
     },
   ],
 };
@@ -82,12 +100,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Baloo+Tammudu+2:wght@700;800&family=Baloo+Thambi+2:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
-        />
+        {/* The hero's font (Instrument Sans, Latin): fetch it with the HTML. */}
+        <link rel="preload" href="/fonts/instrument-sans-400-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         {/* CodeLove Analytics (admin.codelove.in) */}
         <script defer src="https://admin.codelove.in/t.js" />

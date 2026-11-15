@@ -15,5 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default function EditorPage() {
-  return <Editor />;
+  return (
+    <>
+      {/* The editor has no visible page heading; this one is for screen readers and search engines. */}
+      <h1 className="sr-only">Free AI Video Maker – Editor</h1>
+      <Editor />
+    </>
+  );
 }
