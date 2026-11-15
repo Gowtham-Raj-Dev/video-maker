@@ -10,6 +10,9 @@ import { BACKGROUNDS } from "@/engine/backgrounds";
 import { CHARACTERS, STYLES, VOICES } from "@/engine/characters";
 import { FAQ, SITE } from "@/lib/site";
 
+/** The Video Maker walkthrough on the CodeLove YouTube channel. */
+const GUIDE_VIDEO_ID = "z2Y0PRfS7KU";
+
 const LINES: Array<{ name: string; note: string; text: string }> = [
   { name: "Tamil", note: "Tamil voice, Tamil captions", text: "அம்மா, நான்தான் டீச்சரோட ஃபேவரிட் ஸ்டூடன்ட்!" },
   { name: "Tanglish", note: "Tamil voice, English letters", text: "Amma, naan thaan teacher-oda favourite student!" },
@@ -38,9 +41,18 @@ const FEATURES: Array<{ title: string; text: string }> = [
   { title: "Projects you can keep", text: "Your work is saved in the browser automatically; save a project file to move it or come back later." },
 ];
 
+// The questions shown in the "Questions" section below.
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": `${SITE.url}/#faq`,
+  mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+};
+
 export default function Home() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <header className="nav">
         <div className="wrap nav-row">
           <Link href="/" className="brand">
@@ -48,6 +60,7 @@ export default function Home() {
             {SITE.name}
           </Link>
           <nav className="nav-links" aria-label="Sections">
+            <a href="#guide">Guide</a>
             <a href="#cast">Cast</a>
             <a href="#utubeflow">UTubeFlow</a>
             <a href="#languages">Languages</a>
@@ -87,6 +100,25 @@ export default function Home() {
             <span>WhatsApp Status</span>
           </div>
         </div>
+
+        <section id="guide" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">Watch one being made.</h2>
+              <p className="section-sub">A short walkthrough: write the script, cast the characters, record the voices, export the MP4 — and send it to UTubeFlow for YouTube.</p>
+            </div>
+            <div className="guide-video">
+              <iframe
+                src={`https://www.youtube.com/embed/${GUIDE_VIDEO_ID}?rel=0`}
+                title="Video Maker guide: turn a script into a talking cartoon video"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </section>
 
         <section id="cast" className="section">
           <div className="wrap">

@@ -1221,6 +1221,25 @@ input[type="range"] {
   color: var(--muted);
 }
 
+/* The YouTube walkthrough on the home page. */
+.guide-video {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+}
+.guide-video iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 12px;
+  background: #000;
+}
+
 .cast-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(134px, 1fr));
