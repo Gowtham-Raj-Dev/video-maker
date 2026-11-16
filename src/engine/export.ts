@@ -1,4 +1,5 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
+import { activeVideo, seekVideo, videoTimeAt } from "./media";
 import { drawFrame, frameSize } from "./renderer";
 import { MIX_RATE, type Assets, type Project, type Timeline } from "./types";
 
@@ -108,12 +109,16 @@ async function encodeMp4(project: Project, timeline: Timeline, options: ExportOp
   };
 
   const frames = Math.ceil(timeline.duration * FPS);
+  const bgVideo = activeVideo(project, assets);
+  bgVideo?.pause();
   for (let i = 0; i < frames; i++) {
     if (signal?.aborted) {
       video.close();
       throw new DOMException("Stopped", "AbortError");
     }
     if (failure) throw failure;
+    // The visitor's video is stepped to this exact frame before drawing.
+    if (bgVideo) await seekVideo(bgVideo, videoTimeAt(project, bgVideo, i / FPS));
     ctx.setTransform(k, 0, 0, k, 0, 0);
     drawFrame(ctx, project, timeline, i / FPS, assets);
     const frame = new VideoFrame(canvas as CanvasImageSource, { timestamp: Math.round((i * 1e6) / FPS), duration: Math.round(1e6 / FPS) });
@@ -185,6 +190,11 @@ export async function exportRecording(project: Project, timeline: Timeline, opti
   const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
   ctx.setTransform(k, 0, 0, k, 0, 0);
   drawFrame(ctx, project, timeline, 0, assets);
+  const bgVideo = activeVideo(project, assets);
+  if (bgVideo) {
+    await seekVideo(bgVideo, videoTimeAt(project, bgVideo, 0));
+    void bgVideo.play().catch(() => {});
+  }
   recorder.start(500);
   const began = audioCtx.currentTime;
   source?.start();
@@ -200,6 +210,7 @@ export async function exportRecording(project: Project, timeline: Timeline, opti
     };
     tick();
   }).finally(() => {
+    bgVideo?.pause();
     recorder.stop();
     void audioCtx.close();
   });

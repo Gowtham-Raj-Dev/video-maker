@@ -101,6 +101,8 @@ function stagingOf(timeline: Timeline, spread: number): Seat[][] {
 }
 
 const PAD = 600;
+/** Backgrounds the visitor brought: script scene changes don't replace them. */
+export const OWN_BACKGROUNDS = new Set(["video", "custom"]);
 
 const sample = (values: Float32Array, seconds: number) => values[Math.max(0, Math.min(values.length - 1, Math.round(seconds * ENVELOPE_RATE)))] ?? 0;
 
@@ -138,8 +140,9 @@ export function drawFrame(ctx: Ctx, project: Project, timeline: Timeline, t: num
   const cs = L.cs * crowd * (project.charScale ?? 1);
   const u = L.cs / 0.72;
 
+  // The visitor's own video or picture stays for the whole video; otherwise "[bg: …]" lines change the place.
   let bg = project.background;
-  for (let i = 0; i <= cur; i++) bg = spans[i].line.bg ?? bg;
+  if (!OWN_BACKGROUNDS.has(bg)) for (let i = 0; i <= cur; i++) bg = spans[i].line.bg ?? bg;
 
   // The camera: a slow breath, and a push in on the punch line.
   const kick = punch && t >= spans[lastIndex].start ? Math.exp(-(t - spans[lastIndex].start) * 2.2) : 0;
@@ -329,6 +332,21 @@ function drawBackground(ctx: Ctx, project: Project, id: string, stage: { W: numb
     g.addColorStop(1, light ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.22)");
     ctx.fillStyle = g;
     ctx.fillRect(-PAD, -PAD, W + PAD * 2, H + PAD * 2);
+    return;
+  }
+  if (id === "video") {
+    // The visitor's own video, filling the frame (with a margin for the camera). The player keeps it at the right moment.
+    const video = assets?.bgVideo;
+    if (video && video.readyState >= 2 && video.videoWidth) {
+      const iw = video.videoWidth;
+      const ih = video.videoHeight;
+      const m = 0.08;
+      const k = Math.max((stage.W * (1 + m * 2)) / iw, (stage.H * (1 + m * 2)) / ih);
+      ctx.drawImage(video, stage.W / 2 - (iw * k) / 2, stage.H / 2 - (ih * k) / 2, iw * k, ih * k);
+    } else {
+      ctx.fillStyle = "#16151a";
+      ctx.fillRect(-PAD, -PAD, stage.W + PAD * 2, stage.H + PAD * 2);
+    }
     return;
   }
   if (id === "custom" && assets?.bgImage) {

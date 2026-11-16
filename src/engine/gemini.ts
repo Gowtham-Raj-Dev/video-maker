@@ -34,26 +34,33 @@ function explain(status: number, json: ApiError): string {
   return detail || `Gemini request failed (${status}).`;
 }
 
-async function call<T>(key: string, path: string, body?: unknown): Promise<T> {
+function errorOf(status: number, json: ApiError): GeminiError {
+  const details = json.error?.details ?? [];
+  const quotaIds = details.flatMap((d) => d.violations ?? []).map((v) => v.quotaId ?? "").join(" ");
+  const daily = status === 429 && (/PerDay/i.test(quotaIds) || /per day|daily/i.test(json.error?.message ?? ""));
+  const delay = details.map((d) => d.retryDelay).find(Boolean);
+  const retryMs = delay ? Math.ceil(parseFloat(delay) * 1000) : 0;
+  return new GeminiError(status, explain(status, json), daily, retryMs);
+}
+
+/** A model that answered too slowly: the pool moves on to the next one. */
+export const TIMEOUT = 408;
+
+async function call<T>(key: string, path: string, body?: unknown, timeoutMs = 60_000): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API}/${path}`, {
       method: body ? "POST" : "GET",
       headers: { "x-goog-api-key": key, ...(body ? { "Content-Type": "application/json" } : {}) },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") throw new GeminiError(TIMEOUT, "Google took too long to answer. Try again.");
     throw new GeminiError(0, "Couldn't reach Google. Check your internet connection.");
   }
   const json = (await res.json().catch(() => ({}))) as T & ApiError;
-  if (!res.ok) {
-    const details = json.error?.details ?? [];
-    const quotaIds = details.flatMap((d) => d.violations ?? []).map((v) => v.quotaId ?? "").join(" ");
-    const daily = res.status === 429 && (/PerDay/i.test(quotaIds) || /per day|daily/i.test(json.error?.message ?? ""));
-    const delay = details.map((d) => d.retryDelay).find(Boolean);
-    const retryMs = delay ? Math.ceil(parseFloat(delay) * 1000) : 0;
-    throw new GeminiError(res.status, explain(res.status, json), daily, retryMs);
-  }
+  if (!res.ok) throw errorOf(res.status, json);
   return json;
 }
 
@@ -153,12 +160,15 @@ async function modelsOf(key: string, kind: ModelKind): Promise<string[]> {
     tts.sort((a, b) => Number(/flash/.test(b.name)) - Number(/flash/.test(a.name)) || version(b.name) - version(a.name) || rough(a.name) - rough(b.name));
     return tts.map((m) => short(m.name));
   }
-  const usable = all.filter(
-    (m) => m.supportedGenerationMethods?.includes("generateContent") && /gemini/.test(m.name) && !/tts|image|live|embedding|audio|vision|robotics|computer/i.test(m.name),
-  );
-  usable.sort((a, b) => Number(/flash/.test(b.name)) - Number(/flash/.test(a.name)) || rough(a.name) - rough(b.name) || version(b.name) - version(a.name));
+  const usable = all.filter(isTextModel);
+  // Fast first: flash, then stable before preview, newest first. Pro models think for a long time, so they come last.
+  usable.sort((a, b) => Number(/flash/.test(b.name)) - Number(/flash/.test(a.name)) || Number(/pro/.test(a.name)) - Number(/pro/.test(b.name)) || rough(a.name) - rough(b.name) || version(b.name) - version(a.name));
   return usable.map((m) => short(m.name));
 }
+
+/** A chat model that writes text quickly: not speech, pictures, live audio, research agents or "deep think". */
+const isTextModel = (m: ModelInfo) =>
+  Boolean(m.supportedGenerationMethods?.includes("generateContent")) && /gemini/.test(m.name) && !/tts|image|live|embedding|audio|vision|robotics|computer|research|deep|think|nano|banana|veo|lyria/i.test(m.name);
 
 const isKeyProblem = (e: GeminiError) => e.status === 403 || e.status === 401 || (e.status === 400 && /key/i.test(e.message));
 
@@ -171,6 +181,7 @@ export async function withPool<T>(keys: string[], kind: ModelKind, job: (key: st
   if (!keys.length) throw new GeminiError(401, "Add your Gemini API key first.");
   let last: GeminiError | null = null;
   let soonest = Infinity;
+  let slow = 0;
   for (const key of keys) {
     if (deadKeys.has(key)) continue;
     let models: string[];
@@ -211,6 +222,12 @@ export async function withPool<T>(keys: string[], kind: ModelKind, job: (key: st
           if (e.daily) saveDaily(key, model, until);
           soonest = Math.min(soonest, until);
           emit();
+          continue;
+        }
+        if (e.status === TIMEOUT) {
+          // Too slow right now: rest it a while and try the next model, but don't keep people waiting through every one.
+          resting.set(slotId(key, model), Date.now() + 10 * 60_000);
+          if (++slow >= 2) throw new GeminiError(TIMEOUT, "Gemini is very slow right now. Try again in a minute — or use “Copy & paste” to write it with ChatGPT or any other AI.");
           continue;
         }
         if (e.status === 404) {
@@ -266,7 +283,7 @@ export function keyReport(key: string): KeyReport {
   if (!models) return report;
   const tts = models.filter((m) => /tts/i.test(m.name)).map((m) => short(m.name));
   report.tts = tts.length;
-  report.text = models.filter((m) => m.supportedGenerationMethods?.includes("generateContent") && /gemini/.test(m.name) && !/tts|image|live|embedding|audio|vision|robotics|computer/i.test(m.name)).length;
+  report.text = models.filter(isTextModel).length;
   const rests = tts.map((m) => restUntil(key, m)).filter(Boolean);
   report.ttsResting = rests.length;
   if (rests.length) report.backAt = Math.min(...rests);
@@ -317,7 +334,7 @@ export async function speak(key: string, model: string, turns: Turn[], voices: R
     generationConfig: { responseModalities: ["AUDIO"], speechConfig },
   };
   type Reply = { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType: string; data: string } }> } }> };
-  const json = await call<Reply>(key, `models/${model}:generateContent`, body);
+  const json = await call<Reply>(key, `models/${model}:generateContent`, body, 180_000);
   const inline = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)?.inlineData;
   if (!inline) throw new GeminiError(500, "Gemini returned no voice for this line. Try again, or reword it.");
   const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
@@ -345,15 +362,115 @@ export async function speak(key: string, model: string, turns: Turn[], voices: R
   return { samples, rate };
 }
 
-async function write(key: string, model: string, prompt: string, json: boolean): Promise<string> {
-  type Reply = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const reply = await call<Reply>(key, `models/${model}:generateContent`, {
+/** How long a text model may stay silent: before its first words, and between two pieces. */
+const FIRST_WORDS_MS = 30_000;
+const BETWEEN_WORDS_MS = 20_000;
+const WHOLE_REPLY_MS = 90_000;
+
+/** Models that refused the "think less" setting: asked without it from then on. */
+const noThinkingConfig = new Set<string>();
+
+export interface WriteOptions {
+  /** Stops the request (the Stop button). */
+  signal?: AbortSignal;
+  /** Called with everything written so far, as the words arrive. */
+  onText?: (text: string) => void;
+}
+
+/**
+ * Asks a text model and streams its answer, so words show up as they are written
+ * instead of after one long silent wait. A model that stays silent too long gets a
+ * timeout error, and the pool moves on to the next one.
+ */
+async function write(key: string, model: string, prompt: string, json: boolean, opts: WriteOptions = {}): Promise<string> {
+  const thinkLess = /flash/.test(model) && !noThinkingConfig.has(model);
+  const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature: json ? 0.7 : 1.1, ...(json ? { responseMimeType: "application/json" } : {}) },
-  });
-  const text = (reply.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
-  if (!text) throw new GeminiError(500, "Gemini wrote nothing. Try again.");
-  return text.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+    generationConfig: {
+      temperature: json ? 0.7 : 1.1,
+      ...(json ? { responseMimeType: "application/json" } : {}),
+      // A short script needs no long thinking; it is what made writing take minutes.
+      ...(thinkLess ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+    },
+  };
+
+  const ctrl = new AbortController();
+  let timedOut = false;
+  const stopFor = (ms: number) => window.setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+  let idle = stopFor(FIRST_WORDS_MS);
+  const whole = stopFor(WHOLE_REPLY_MS);
+  const onStop = () => ctrl.abort();
+  opts.signal?.addEventListener("abort", onStop);
+  const failed = (e: unknown): never => {
+    if (opts.signal?.aborted) throw new DOMException("Stopped", "AbortError");
+    if (timedOut) throw new GeminiError(TIMEOUT, "Gemini took too long to answer. Try again.");
+    if (e instanceof GeminiError) throw e;
+    throw new GeminiError(0, "Couldn't reach Google. Check your internet connection.");
+  };
+
+  try {
+    if (opts.signal?.aborted) throw new DOMException("Stopped", "AbortError");
+    let res: Response;
+    try {
+      res = await fetch(`${API}/models/${model}:streamGenerateContent?alt=sse`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      return failed(e);
+    }
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as ApiError;
+      if (res.status === 400 && thinkLess && /think/i.test(err.error?.message ?? "")) {
+        noThinkingConfig.add(model);
+        return write(key, model, prompt, json, opts);
+      }
+      throw errorOf(res.status, err);
+    }
+    if (!res.body) return failed(new Error("no body"));
+
+    type Chunk = ApiError & { candidates?: Array<{ content?: { parts?: Array<{ text?: string; thought?: boolean }> } }> };
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    let text = "";
+    for (;;) {
+      let piece: ReadableStreamReadResult<string>;
+      try {
+        piece = await reader.read();
+      } catch (e) {
+        return failed(e);
+      }
+      if (piece.done) break;
+      buffer += piece.value;
+      for (let nl = buffer.indexOf("\n"); nl >= 0; nl = buffer.indexOf("\n")) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        let chunk: Chunk;
+        try {
+          chunk = JSON.parse(line.slice(5)) as Chunk;
+        } catch {
+          continue;
+        }
+        if (chunk.error) throw errorOf(Number(chunk.error.status === "RESOURCE_EXHAUSTED" ? 429 : 500), chunk);
+        const words = (chunk.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
+        if (!words) continue;
+        text += words;
+        window.clearTimeout(idle);
+        idle = stopFor(BETWEEN_WORDS_MS);
+        opts.onText?.(text);
+      }
+    }
+    text = text.trim();
+    if (!text) throw new GeminiError(500, "Gemini wrote nothing. Try again.");
+    return text.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+  } finally {
+    window.clearTimeout(idle);
+    window.clearTimeout(whole);
+    opts.signal?.removeEventListener("abort", onStop);
+  }
 }
 
 const LANGUAGE_RULES: Record<string, string> = {
@@ -370,23 +487,70 @@ export interface ScriptAsk {
   language: string;
   tone: string;
   lines: number;
-  names: string[];
+  /** How many people speak. */
+  people: number;
+  /** Who may speak, with who they are. */
+  cast: Array<{ name: string; about: string }>;
+  /** true: the AI picks `people` of `cast` who fit the story; false: it uses exactly `cast`. */
+  pick: boolean;
   backgrounds: string[];
 }
 
-/** A script in our format, written by Gemini from a topic. */
-export function writeScript(key: string, model: string, ask: ScriptAsk): Promise<string> {
-  return write(key, model, [
+/**
+ * The request for a script in our format. The same words go to Gemini, or — copied by
+ * the visitor — to ChatGPT, Claude or any other AI, whose reply is pasted back.
+ */
+export function scriptPrompt(ask: ScriptAsk, forAnotherAi = false): string {
+  const pipe = ask.language === "tanglish" || ask.language === "hinglish";
+  const roster = ask.cast.map((c) => `- ${c.name}: ${c.about}`).join("\n");
+  const first = ask.cast[0]?.name ?? "Meena";
+  return [
     `Write a short ${ask.tone} cartoon dialogue for a vertical video about: ${ask.topic}`,
-    `Use exactly these character names and no others: ${ask.names.join(", ")}. Give each a turn; keep it a real back-and-forth.`,
+    ask.pick
+      ? `Cast it with exactly ${ask.people} ${ask.people === 1 ? "person" : "people"} from this list — pick the ones who fit the story best (for a child and a parent, pick a child and Amma or Appa; for friends, pick friends):\n${roster}`
+      : `Use exactly these people and no others:\n${roster}`,
+    "Write each speaker's name exactly as in the list, in English letters. Give each a turn; keep it a real back-and-forth.",
+    "The names are only labels for the cartoon people. Inside the lines, people talk to each other the way they really would in that relationship: a parent calls their child by a pet name, 'kanna', 'da' / 'di' or a real name — never 'Machan' (that word is only for friends of the same age); children call their mother 'Amma' and father 'Appa'. Never use a relationship word that doesn't match who the people are.",
     `About ${ask.lines} lines. Each line short (under 14 words) and easy to say aloud. The last line is the punch line or the takeaway — set it up, don't explain it.`,
     LANGUAGE_RULES[ask.language] ?? LANGUAGE_RULES.english,
     "Format, one line each, nothing else:",
-    "Name (mood): spoken words",
+    pipe ? "Name (mood): spoken words | subtitle words" : "Name (mood): spoken words",
     "Mood is one of: normal, happy, sad, shocked, angry, proud, deadpan, sleepy. Names and moods stay in English.",
-    `Start with one line that picks the place: [bg: X] where X is one of: ${ask.backgrounds.join(", ")}.`,
-    "No title, no stage directions, no narration, no markdown, no quotes around lines. Keep it clean and family-friendly.",
-  ].join("\n"), false);
+    `First line: Title: <a short catchy hook for the video, under 45 characters, ${pipe ? "in English letters" : "in the same language as the lines"}, that doesn't give the ending away>.`,
+    `Second line picks the place: [bg: X] where X is one of: ${ask.backgrounds.join(", ")}.`,
+    "No stage directions, no narration, no markdown, no quotes around lines. Keep it clean and family-friendly.",
+    ...(forAnotherAi
+      ? [
+          "",
+          "Example of the exact format:",
+          "Title: Wait for the last line 😂",
+          `[bg: ${ask.backgrounds[0] ?? "room"}]`,
+          pipe ? `${first} (happy): ${ask.language === "tanglish" ? "இங்க பாரு! | Inga paaru!" : "यहाँ देखो! | Yahan dekho!"}` : `${first} (happy): Look at this!`,
+          "",
+          "Reply with only the script inside one plain-text code block — nothing before or after it.",
+        ]
+      : []),
+  ].join("\n");
+}
+
+/** The same script with every line put into the chosen language (names, moods, meaning and order kept). */
+export function fixScriptLanguage(key: string, model: string, script: string, language: string, opts: WriteOptions = {}): Promise<string> {
+  const pipe = language === "tanglish" || language === "hinglish";
+  return write(key, model, [
+    "Here is a cartoon video script, one line each:",
+    script,
+    "",
+    "Rewrite it so EVERY line follows this language rule exactly:",
+    LANGUAGE_RULES[language] ?? LANGUAGE_RULES.english,
+    pipe ? "Format: Name (mood): spoken words | subtitle words" : "Format: Name (mood): spoken words",
+    "Keep the same speakers, the same moods, the same [bg: …] and [pause: …] lines, the same order and the same meaning and jokes. Names and moods stay in English.",
+    "Reply with only the script — no title, no notes, no markdown.",
+  ].join("\n"), false, opts);
+}
+
+/** A script in our format, written by Gemini from a topic; `onText` sees it as it is written. */
+export function writeScript(key: string, model: string, ask: ScriptAsk, opts: WriteOptions = {}): Promise<string> {
+  return write(key, model, scriptPrompt(ask), false, opts);
 }
 
 export interface VideoMeta {

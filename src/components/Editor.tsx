@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  AudioLines, Captions, Check, Clapperboard, Download, FileText, FolderOpen, Image as ImageIcon, ImagePlus, KeyRound, Loader2, Mic, Music, Pause, Play, Plus, RefreshCw, Save, SkipBack, SkipForward, Sparkles, Square, Type, Upload, Users, Volume2, X,
+  ArrowDown, ArrowLeft, ArrowUp, AudioLines, Captions, Check, ChevronRight, Clapperboard, Copy, CopyPlus, Download, ExternalLink, FileText, Film, FolderOpen, Image as ImageIcon, ImagePlus, KeyRound, Loader2, Mic, Music, Pause, Pencil, Play, Plus, RefreshCw, Save, SkipBack, SkipForward, Sparkles, Square, Trash2, Type, Upload, Users, Volume2, X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -12,17 +12,19 @@ import { Select, type Option } from "@/components/Select";
 import { usePlayer } from "@/components/usePlayer";
 import { buildTimeline } from "@/engine/audio";
 import { BACKGROUNDS } from "@/engine/backgrounds";
-import { CHARACTERS, STYLES, VOICES, characterById } from "@/engine/characters";
+import { CHARACTERS, STYLES, VOICES, aboutCharacter, characterById } from "@/engine/characters";
+import { decodeMono, loadVideo } from "@/engine/media";
 import { canEncodeMp4, exportMp4, exportRecording, toSrt, type Quality } from "@/engine/export";
-import { checkKey, keyReport, onPoolChange, speak, splitKeys, withPool, writeMeta, writeScript, type VideoMeta } from "@/engine/gemini";
-import { LANGUAGES, MOODS, SAMPLES, defaultProject, parseScript, syncCast } from "@/engine/script";
-import { clearVoices, loadKeys, loadProject, saveKeys, saveProject } from "@/engine/store";
-import { MIX_RATE, type Assets, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline, type VideoMode } from "@/engine/types";
-import { recordVoices, type LineVoice } from "@/engine/voice";
+import { checkKey, fixScriptLanguage, keyReport, onPoolChange, scriptPrompt, speak, splitKeys, withPool, writeMeta, writeScript, type ScriptAsk, type VideoMeta } from "@/engine/gemini";
+import { LANGUAGES, MOODS, SAMPLES, cleanPastedScript, defaultProject, deleteLine, duplicateLine, languageProblems, moveLine, parseScript, syncCast, updateLine, type LinePatch } from "@/engine/script";
+import { clearVoices, getMedia, loadKeys, loadProject, putMedia, saveKeys, saveProject } from "@/engine/store";
+import { MIX_RATE, type Assets, type Mood, type CameraStyle, type CastMember, type Format, type LanguageId, type MusicId, type Project, type SubtitlePosition, type SubtitleStyle, type Timeline, type VideoMode } from "@/engine/types";
+import { cachedVoices, recordVoices, type LineVoice } from "@/engine/voice";
 import { SITE } from "@/lib/site";
 import { UTUBEFLOW_URL, isEmbeddedInUTubeFlow, linkToUTubeFlowParent, sendToUTubeFlow, sendToUTubeFlowParent } from "@/lib/utubeflow";
 
-type Tab = "script" | "cast" | "scene" | "captions" | "audio" | "key" | "export";
+/** "line": editing one line picked on the timeline (not in the rail). */
+type Tab = "script" | "cast" | "scene" | "captions" | "audio" | "key" | "export" | "line";
 type Status = { phase: "idle" } | { phase: "voice" | "video" | "writing"; note: string; share: number };
 
 const TABS: Array<{ id: Tab; name: string; title: string; desc: string; icon: ReactNode }> = [
@@ -34,6 +36,17 @@ const TABS: Array<{ id: Tab; name: string; title: string; desc: string; icon: Re
   { id: "key", name: "API key", title: "Gemini API key", desc: "Your free Google key gives the voices. It stays in this browser.", icon: <KeyRound size={20} /> },
   { id: "export", name: "Export", title: "Export", desc: "Make the MP4, then download it or send it to YouTube.", icon: <Download size={20} /> },
 ];
+/** What each language means for the voice and the subtitles. */
+const LANGUAGE_VOICE: Record<LanguageId, string> = {
+  tamil: "Tamil voice · Tamil subtitles",
+  tanglish: "Tamil voice · English-letter subtitles",
+  english: "English voice · English subtitles",
+  hindi: "Hindi voice · Hindi subtitles",
+  hinglish: "Hindi voice · English-letter subtitles",
+  telugu: "Telugu voice · Telugu subtitles",
+};
+const LINE_TAB ={ id: "line" as const, name: "Line", title: "Edit line", desc: "Change what is said, who says it, and when.", icon: <Pencil size={20} /> };
+const MOOD_NAMES: Record<Mood, string> = { normal: "Normal", happy: "Happy", sad: "Sad", shocked: "Shocked", angry: "Angry", proud: "Proud", deadpan: "Deadpan", sleep: "Sleepy" };
 const FORMATS: Array<{ id: Format; name: string }> = [{ id: "9:16", name: "9:16 Shorts" }, { id: "16:9", name: "16:9 YouTube" }, { id: "1:1", name: "1:1 Post" }];
 const FORMATS_SHORT: Array<{ id: Format; name: string }> = [{ id: "9:16", name: "9:16" }, { id: "16:9", name: "16:9" }, { id: "1:1", name: "1:1" }];
 const PLAIN_COLORS: Array<[string, string]> = [["#111111", "Black"], ["#0f1b2d", "Navy"], ["#1d3a2a", "Forest"], ["#3b1f4a", "Plum"], ["#f6f4ef", "Paper"], ["#ffffff", "White"], ["#ffd84d", "Yellow"]];
@@ -50,7 +63,32 @@ const QUALITIES: Array<Option<Quality>> = [
 const TONES: Array<Option<string>> = ["funny", "emotional", "motivational", "educational", "spooky-funny", "romantic comedy", "sarcastic"].map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }));
 const HIGHLIGHTS = ["#FFD166", "#80ED99", "#5CC8FF", "#FF8FAB", "#FF6B6B", "#C9B6FF", "#FFFFFF"];
 const SPEAKER_COLORS = ["#FF8A5B", "#5BB8A6", "#F2C14E", "#8FA8F0", "#E989B3", "#9CC56B", "#C59BE0", "#6FC2E0"];
-const EMPTY_ASSETS: Assets = { bgImage: null, bgSize: [1, 1], music: null };
+const EMPTY_ASSETS: Assets = { bgImage: null, bgSize: [1, 1], music: null, bgVideo: null, videoAudio: null };
+/** Own files bigger than this aren't kept for the next visit (they still work now). */
+const KEEP_LIMIT = 300 * 1_048_576;
+
+/** Other AIs to write the script with: the prompt is copied first, and these open it ready to paste (ChatGPT and Claude even fill it in). */
+const OTHER_AIS: Array<{ name: string; url: (prompt: string) => string }> = [
+  { name: "ChatGPT", url: (p) => `https://chatgpt.com/?q=${encodeURIComponent(p)}` },
+  { name: "Claude", url: (p) => `https://claude.ai/new?q=${encodeURIComponent(p)}` },
+  { name: "Gemini", url: () => "https://gemini.google.com/app" },
+];
+
+/** Copies text; inside a frame without clipboard access, falls back to the old select-and-copy. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = Object.assign(document.createElement("textarea"), { value: text });
+    area.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
 
 const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -95,8 +133,10 @@ function Switch({ checked, onChange, children }: { checked: boolean; onChange: (
 }
 
 /** The timeline: a time ruler, then one track each for the voices, the scenes and the music. Drag anywhere to scrub. */
-function Tracks({ timeline, time, onSeek, project, colorOf, characters }: {
+function Tracks({ timeline, time, onSeek, project, colorOf, characters, selected, onSelect, onOpen, videoName }: {
   timeline: Timeline; time: number; onSeek: (t: number) => void; project: Project; colorOf: (name: string) => string; characters: boolean;
+  /** The line being edited, and what picking a clip or a bar does. */
+  selected: number | null; onSelect: (i: number) => void; onOpen: (tab: "scene" | "audio") => void; videoName: string;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const d = Math.max(timeline.duration, 0.01);
@@ -108,16 +148,17 @@ function Tracks({ timeline, time, onSeek, project, colorOf, characters }: {
   for (let t = 0; t <= d + 1e-6; t += step / 2) minor.push(t);
 
   // Scenes: the chosen background, changed by "[bg: …]" lines (characters mode only).
-  const sceneName = (id: string) => (id === "plain" ? "Plain colour" : id === "custom" ? "Your picture" : BACKGROUNDS.find((b) => b.id === id)?.name ?? id);
+  const sceneName = (id: string) => (id === "plain" ? "Plain colour" : id === "custom" ? "Your picture" : id === "video" ? `Your video${videoName ? ` · ${videoName}` : ""}` : BACKGROUNDS.find((b) => b.id === id)?.name ?? id);
   const sceneSwatch = (id: string) => {
     if (id === "plain") return project.plainColor;
+    if (id === "video") return "repeating-linear-gradient(90deg, #16151a 0 3px, #555 3px 5px)";
     const b = BACKGROUNDS.find((x) => x.id === id);
     return b ? `linear-gradient(${b.swatch[0]} 0 60%, ${b.swatch[1]} 60%)` : "var(--surface-3)";
   };
   const scenes: Array<{ id: string; start: number; end: number }> = [];
   let curBg = project.background;
   let from = 0;
-  if (characters) {
+  if (characters && project.background !== "video" && project.background !== "custom") {
     timeline.spans.forEach((s, i) => {
       if (!s.line.bg || s.line.bg === curBg) return;
       if (i > 0) {
@@ -173,29 +214,49 @@ function Tracks({ timeline, time, onSeek, project, colorOf, characters }: {
             {timeline.spans.map((s, i) => {
               const c = colorOf(s.line.speaker);
               const on = time >= s.start && time <= s.end;
+              const pause = s.line.pause ?? 0;
               return (
-                <div key={i} className="tl2-clip" data-on={on} title={`${s.line.speaker}: ${s.line.caption}`} style={{ left: pct(s.start), width: pct(s.end - s.start), borderColor: c, background: `color-mix(in srgb, ${c} ${on ? 34 : 20}%, white)` }}>
-                  <b>{s.line.speaker}</b>
-                  <span>{s.line.caption}</span>
+                <div key={i}>
+                  {pause > 0 && (
+                    <div className="tl2-pause" style={{ left: pct(s.start - pause), width: pct(pause) }} title={`${pause} s pause`}>
+                      <span>{pause}s</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="tl2-clip"
+                    data-on={on}
+                    data-sel={selected === i}
+                    title={`${s.line.speaker}: ${s.line.caption} — click to edit`}
+                    style={{ left: pct(s.start), width: pct(s.end - s.start), borderColor: c, background: `color-mix(in srgb, ${c} ${on || selected === i ? 38 : 22}%, var(--surface))` }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      onSelect(i);
+                      onSeek(s.start + 0.01);
+                    }}
+                  >
+                    <b>{s.line.speaker}</b>
+                    <span>{s.line.caption}</span>
+                  </button>
                 </div>
               );
             })}
           </div>
           <div className="tl2-lane tl2-sm">
             {scenes.map((s, i) => (
-              <div key={i} className="tl2-bar" style={{ left: pct(s.start), width: pct(s.end - s.start) }}>
+              <button type="button" key={i} className="tl2-bar" style={{ left: pct(s.start), width: pct(s.end - s.start) }} onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpen("scene")} title="Change the scene">
                 <i style={{ background: sceneSwatch(s.id) }} />
                 <span>{sceneName(s.id)}</span>
-              </div>
+              </button>
             ))}
           </div>
           <div className="tl2-lane tl2-sm">
             {project.music === "none" ? (
-              <span className="tl2-empty">No music</span>
+              <button type="button" className="tl2-empty" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpen("audio")}>No music · add</button>
             ) : (
-              <div className="tl2-bar tl2-music" style={{ left: 0, width: "100%", opacity: 0.45 + project.musicVolume * 0.55 }}>
-                <span>{musicName}{timeline.silent ? " · plays once voices are recorded" : ""}</span>
-              </div>
+              <button type="button" className="tl2-bar tl2-music" style={{ left: 0, width: "100%", opacity: 0.45 + project.musicVolume * 0.55 }} onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpen("audio")} title="Change the music">
+                <span>{musicName}{project.duck ? " · quieter under voices" : ""}{timeline.silent ? " · plays once voices are recorded" : ""}</span>
+              </button>
             )}
           </div>
           <div className="tl2-head" style={{ left: pct(time) }}><b /></div>
@@ -212,7 +273,13 @@ export function Editor() {
   useEffect(() => {
     if (!isEmbeddedInUTubeFlow()) return;
     setEmbedded(true);
-    return linkToUTubeFlowParent();
+    // The frame never scrolls as a page (only the panels inside do), so UTubeFlow's page can't be dragged along.
+    document.documentElement.classList.add("vm-embed");
+    const unlink = linkToUTubeFlowParent();
+    return () => {
+      unlink();
+      document.documentElement.classList.remove("vm-embed");
+    };
   }, []);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<Tab>("script");
@@ -231,9 +298,27 @@ export function Editor() {
   const [fps, setFps] = useState(30);
   const [meta, setMeta] = useState<VideoMeta | null>(null);
   const [fonts, setFonts] = useState(0);
-  const [ai, setAi] = useState({ open: false, topic: "", tone: "funny", lines: 6, people: 2 });
+  const [ai, setAi] = useState({
+    open: false, topic: "", tone: "funny", lines: 6, people: 2, via: "gemini" as "gemini" | "paste", pasted: "",
+    /** true: the AI picks who fits the story; false: the people already in the video. */
+    pick: true,
+    /** "write": the ask; "review": the script it wrote, to read, fix and confirm before it is used. */
+    stage: "write" as "write" | "review", draft: "", draftTitle: "",
+  });
+  /** Gemini's script as it is being written, and what went wrong (shown inside the AI dialog). */
+  const [aiLive, setAiLive] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [draftEdit, setDraftEdit] = useState(false);
+  /** Bumped to record the voices and play right after a new script is in. */
+  const [voiceKick, setVoiceKick] = useState(0);
+  const aiTopicRef = useRef<HTMLTextAreaElement>(null);
   const [assets, setAssets] = useState<Assets>(EMPTY_ASSETS);
-  const [assetNames, setAssetNames] = useState({ bg: "", music: "" });
+  const [assetNames, setAssetNames] = useState({ bg: "", music: "", video: "" });
+  const [loadingMedia, setLoadingMedia] = useState("");
+  /** The line picked on the timeline, edited in the "line" panel. */
+  const [selected, setSelected] = useState<number | null>(null);
+  const videoFileRef = useRef<HTMLInputElement>(null);
   const [testing, setTesting] = useState("");
   /** The visitor chose to watch without a voice: stop covering the stage. */
   const [draftOk, setDraftOk] = useState(false);
@@ -264,10 +349,10 @@ export function Editor() {
   const sig = useMemo(() => JSON.stringify([parsed.lines.map((l) => [l.speaker, l.text]), project.cast.map((c) => [c.name, c.voice])]), [parsed, project.cast]);
   const voices = voiced?.sig === sig ? voiced.voices : null;
   const timeline = useMemo(
-    () => buildTimeline(parsed.lines, project, voices, assets.music),
+    () => buildTimeline(parsed.lines, project, voices, assets.music, assets.videoAudio),
     // Only what changes the timing or the sound; looks are read at draw time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parsed, voices, project.music, project.musicVolume, project.sfx, project.punch, project.lineGap, assets.music],
+    [parsed, voices, project.music, project.musicVolume, project.sfx, project.punch, project.lineGap, project.musicStart, project.duck, project.background, project.videoVolume, project.videoStart, assets.music, assets.videoAudio],
   );
   const projectSig = useMemo(() => JSON.stringify(project), [project]);
   const player = usePlayer(project, timeline, assets, fonts);
@@ -314,6 +399,17 @@ export function Editor() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Esc closes the AI dialog.
+  const closeAiRef = useRef(() => {});
+  useEffect(() => {
+    if (!ai.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeAiRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ai.open]);
+
   const needKey = () => {
     setError("Add your free Gemini API key first — it is what gives the characters their voices.");
     setTab("key");
@@ -342,6 +438,22 @@ export function Editor() {
       abortRef.current = null;
     }
   }
+
+  // Voices recorded before (this visit or an earlier one) come back by themselves, without a request.
+  useEffect(() => {
+    if (!loaded || voices || busy || !parsed.lines.length) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      void cachedVoices(parsed.lines, project.cast).then((found) => {
+        if (live && found) setVoiced({ sig, voices: found });
+      });
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, loaded, busy]);
 
   // Play once the new voices are in the timeline.
   const autoPlayRef = useRef(false);
@@ -399,26 +511,151 @@ export function Editor() {
     if (!silent && !voices && !keys.length) return needKey();
     setTab("export");
     void run(async (signal) => {
-      const full = silent ? buildTimeline(parsed.lines, project, null, assets.music) : buildTimeline(parsed.lines, project, await makeVoices(false, signal), assets.music);
+      const full = silent ? buildTimeline(parsed.lines, project, null, assets.music, assets.videoAudio) : buildTimeline(parsed.lines, project, await makeVoices(false, signal), assets.music, assets.videoAudio);
       await renderVideo(full, signal);
     });
   };
 
+  /** What the AI is asked for: the topic, the language, and the names already in the video first. */
+  const keepCast = !ai.pick && project.cast.length > 0;
+  const aiAsk = (): ScriptAsk => {
+    // One entry per name (both styles share names), described so the AI casts the story sensibly.
+    const library = CHARACTERS.filter((c, i) => CHARACTERS.findIndex((x) => x.name === c.name) === i);
+    const cast = keepCast
+      ? project.cast.map((m) => ({ name: m.name, about: aboutCharacter(characterById(m.characterId)) }))
+      : library.map((c) => ({ name: c.name, about: aboutCharacter(c) }));
+    return {
+      topic: ai.topic.trim() || "a funny everyday moment at home",
+      language: project.language,
+      tone: ai.tone,
+      lines: ai.lines,
+      people: keepCast ? project.cast.length : ai.people,
+      cast,
+      pick: !keepCast,
+      backgrounds: BACKGROUNDS.slice(0, 12).map((b) => b.id),
+    };
+  };
+
+  const openAi = () => {
+    setAi((a) => ({ ...a, open: true, stage: "write" }));
+    setAiError("");
+    setCopied(false);
+    requestAnimationFrame(() => aiTopicRef.current?.focus());
+  };
+  const closeAi = () => {
+    if (status.phase === "writing") abortRef.current?.abort();
+    setAi((a) => ({ ...a, open: false }));
+  };
+  closeAiRef.current = closeAi;
+
+  /** Puts a new script in; with `withVoice`, records the voices and plays it straight after. */
+  const applyScript = (script: string, title: string, withVoice: boolean) => {
+    setScript(script);
+    // A new story gets its own title: the AI's, or the idea it was written from (never the old video's).
+    const fallback = ai.topic.trim().replace(/^./, (c) => c.toUpperCase()).slice(0, 60);
+    set("title", title || fallback || project.title);
+    setDraftOk(false);
+    setAi((a) => ({ ...a, open: false, pasted: "", stage: "write", draft: "", draftTitle: "" }));
+    setSelected(null);
+    setTab("script");
+    if (withVoice) setVoiceKick((n) => n + 1);
+  };
+
+  // After a new script is in, voice it (this render already has the new lines).
+  useEffect(() => {
+    if (voiceKick) generateVoice(false, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceKick]);
+
   async function aiScript() {
+    setAiError("");
+    if (!ai.topic.trim()) {
+      aiTopicRef.current?.focus();
+      return setAiError("Tell the AI what the video is about.");
+    }
+    if (!keys.length) return setAiError("no-key");
     setError("");
-    if (!ai.topic.trim()) return setError("Tell the AI what the video is about.");
-    if (!keys.length) return needKey();
-    const names = [...project.cast.map((c) => c.name), ...CHARACTERS.map((c) => c.name).filter((n) => !project.cast.some((c) => c.name === n))].slice(0, ai.people);
-    setStatus({ phase: "writing", note: "Gemini is writing your script…", share: 0.5 });
+    player.stop();
+    const abort = new AbortController();
+    abortRef.current = abort;
+    setAiLive("");
+    setStatus({ phase: "writing", note: "Gemini is writing your script…", share: 0.4 });
     try {
-      setScript(await withPool(keys, "text", (key, model) => writeScript(key, model, { topic: ai.topic.trim(), language: project.language, tone: ai.tone, lines: ai.lines, names, backgrounds: BACKGROUNDS.slice(0, 12).map((b) => b.id) })));
-      setAi((a) => ({ ...a, open: false }));
+      const ask = aiAsk();
+      const text = await withPool(keys, "text", (key, model) => writeScript(key, model, ask, { signal: abort.signal, onText: setAiLive }));
+      const { script, title } = cleanPastedScript(text);
+      if (!parseScript(script).lines.length) throw new Error("Gemini's reply didn't have any lines like  Name: words. Try again, or use Copy & paste.");
+      // Not used yet: shown first, to read, fix and confirm.
+      setAi((a) => ({ ...a, stage: "review", draft: script, draftTitle: title }));
     } catch (e) {
-      setError(messageOf(e));
+      if (!isAbort(e)) setAiError(messageOf(e));
     } finally {
       setStatus({ phase: "idle" });
+      abortRef.current = null;
+      setAiLive("");
     }
   }
+
+  const pastedScript = useMemo(() => cleanPastedScript(ai.pasted), [ai.pasted]);
+  const pastedLines = useMemo(() => parseScript(pastedScript.script).lines, [pastedScript]);
+  const takePasted = () => {
+    if (!pastedLines.length) return setAiError("No lines found yet. Each line should look like  Meena: words");
+    setAiError("");
+    setAi((a) => ({ ...a, stage: "review", draft: pastedScript.script, draftTitle: pastedScript.title }));
+  };
+
+  // The script waiting for a yes: its lines, who speaks, and lines not in the chosen language.
+  const draftLines = useMemo(() => parseScript(ai.draft).lines, [ai.draft]);
+  const draftProblems = useMemo(() => languageProblems(draftLines, project.language), [draftLines, project.language]);
+  const draftCast = useMemo(() => syncCast(draftLines, project.cast), [draftLines, project.cast]);
+  /** Has Gemini put the lines that aren't in the chosen language into it. */
+  async function fixDraft() {
+    setAiError("");
+    if (!keys.length) return setAiError("no-key");
+    const abort = new AbortController();
+    abortRef.current = abort;
+    setAiLive("");
+    setStatus({ phase: "writing", note: `Putting every line in ${language.name}…`, share: 0.4 });
+    try {
+      const text = await withPool(keys, "text", (key, model) => fixScriptLanguage(key, model, ai.draft, project.language, { signal: abort.signal, onText: setAiLive }));
+      const { script } = cleanPastedScript(text);
+      if (!parseScript(script).lines.length) throw new Error("Gemini's reply had no lines. Try again.");
+      setAi((a) => ({ ...a, draft: script }));
+    } catch (e) {
+      if (!isAbort(e)) setAiError(messageOf(e));
+    } finally {
+      setStatus({ phase: "idle" });
+      abortRef.current = null;
+      setAiLive("");
+    }
+  }
+
+  const aiErrorNote =
+    aiError === "no-key" ? (
+      <div className="note note-info ai-nokey">
+        <span>Gemini needs your free API key. No key? Use <b>Copy &amp; paste</b> — any AI can write it (the voices still need the key).</span>
+        <button type="button" className="btn btn-sm" onClick={() => { closeAi(); setTab("key"); }}><KeyRound size={14} /> Add key</button>
+      </div>
+    ) : aiError ? (
+      <p className="note note-error" role="alert">{aiError}</p>
+    ) : null;
+
+  const confirmDraft = (withVoice: boolean) => {
+    if (!draftLines.length) return setAiError("The script has no lines like  Name: words");
+    // Unlock sound now, while this is still the click: the voice plays after it is recorded.
+    if (withVoice) player.prime();
+    applyScript(ai.draft, ai.draftTitle, withVoice);
+  };
+  const copyPrompt = async () => {
+    setAiError("");
+    if (!ai.topic.trim()) {
+      aiTopicRef.current?.focus();
+      return setAiError("Tell the AI what the video is about first.");
+    }
+    const ok = await copyText(scriptPrompt(aiAsk(), true));
+    setCopied(ok);
+    if (!ok) setAiError("Couldn't copy here. Open “See the prompt” and copy it by hand.");
+  };
 
   async function aiMeta() {
     setError("");
@@ -499,36 +736,114 @@ export function Editor() {
     });
   };
 
-  async function pickBackground(file: File | undefined) {
+  // ─── Editing one line picked on the timeline ───
+  const selectLine = (i: number) => {
+    setSelected(i);
+    setTab("line");
+  };
+  const patchLine = (i: number, patch: LinePatch) => setScript(updateLine(project.script, i, patch));
+  const shiftLine = (i: number, dir: -1 | 1) => {
+    setScript(moveLine(project.script, i, dir));
+    setSelected(i + dir);
+  };
+  const removeLine = (i: number) => {
+    setScript(deleteLine(project.script, i));
+    setSelected(parsed.lines.length > 1 ? Math.min(i, parsed.lines.length - 2) : null);
+    if (parsed.lines.length <= 1) setTab("script");
+  };
+  const copyLine = (i: number) => {
+    setScript(duplicateLine(project.script, i));
+    setSelected(i + 1);
+  };
+  /** Plays just this line (and a moment around it). */
+  const hearLine = (i: number) => {
+    const span = timeline.spans[i];
+    if (!span) return;
+    if (!voices) return playOrVoice();
+    player.playFrom(Math.max(0, span.start - 0.15));
+  };
+  // Past the end after a delete or a new script: let go.
+  useEffect(() => {
+    if (selected !== null && selected >= parsed.lines.length) setSelected(parsed.lines.length ? parsed.lines.length - 1 : null);
+  }, [selected, parsed.lines.length]);
+
+  // Own files: opened now, kept in this browser for the next visit. `restore` skips choosing them again.
+  async function pickBackground(file: Blob | undefined, name = (file as File | undefined)?.name ?? "picture", restore = false) {
     if (!file) return;
     try {
       const image = await createImageBitmap(file);
       setAssets((a) => ({ ...a, bgImage: image, bgSize: [image.width, image.height] }));
-      setAssetNames((n) => ({ ...n, bg: file.name }));
-      set("background", "custom");
+      setAssetNames((n) => ({ ...n, bg: name }));
+      if (!restore) {
+        set("background", "custom");
+        if (file.size < KEEP_LIMIT) void putMedia("picture", { name, blob: file });
+      }
     } catch {
-      setError("That picture couldn't be opened. Try a JPG or PNG.");
+      if (!restore) setError("That picture couldn't be opened. Try a JPG or PNG.");
     }
   }
 
-  async function pickMusic(file: File | undefined) {
+  async function pickMusic(file: Blob | undefined, name = (file as File | undefined)?.name ?? "music", restore = false) {
     if (!file) return;
-    try {
-      // Decoding in a context at the mix's rate gives the track already resampled.
-      const decoded = await new OfflineAudioContext(1, 1, MIX_RATE).decodeAudioData(await file.arrayBuffer());
-      const length = Math.min(decoded.length, MIX_RATE * 300);
-      const mono = new Float32Array(length);
-      for (let c = 0; c < decoded.numberOfChannels; c++) {
-        const data = decoded.getChannelData(c);
-        for (let i = 0; i < length; i++) mono[i] += data[i] / decoded.numberOfChannels;
-      }
-      setAssets((a) => ({ ...a, music: mono }));
-      setAssetNames((n) => ({ ...n, music: file.name }));
-      set("music", "custom");
-    } catch {
-      setError("That audio file couldn't be opened. Try an MP3, WAV or M4A.");
+    if (!restore) setLoadingMedia("Opening your music…");
+    const mono = await decodeMono(file);
+    setLoadingMedia("");
+    if (!mono) {
+      if (!restore) setError("That audio file couldn't be opened. Try an MP3, WAV or M4A.");
+      return;
+    }
+    setAssets((a) => ({ ...a, music: mono }));
+    setAssetNames((n) => ({ ...n, music: name }));
+    if (!restore) {
+      setProject((p) => ({ ...p, music: "custom", musicStart: 0 }));
+      if (file.size < KEEP_LIMIT) void putMedia("music", { name, blob: file });
     }
   }
+
+  async function pickVideo(file: Blob | undefined, name = (file as File | undefined)?.name ?? "video", restore = false) {
+    if (!file) return;
+    if (!restore) setLoadingMedia("Opening your video…");
+    try {
+      const [video, sound] = await Promise.all([loadVideo(file), decodeMono(file)]);
+      setAssets((a) => {
+        if (a.bgVideo) {
+          a.bgVideo.pause();
+          URL.revokeObjectURL(a.bgVideo.src);
+        }
+        return { ...a, bgVideo: video, videoAudio: sound };
+      });
+      setAssetNames((n) => ({ ...n, video: name }));
+      if (!restore) {
+        setProject((p) => ({ ...p, background: "video", videoStart: 0, videoVolume: sound ? p.videoVolume ?? 0.5 : 0 }));
+        if (file.size < KEEP_LIMIT) void putMedia("video", { name, blob: file });
+      }
+    } catch (e) {
+      if (!restore) setError(messageOf(e));
+    } finally {
+      setLoadingMedia("");
+    }
+  }
+
+  const removeVideo = () => {
+    setAssets((a) => {
+      if (a.bgVideo) {
+        a.bgVideo.pause();
+        URL.revokeObjectURL(a.bgVideo.src);
+      }
+      return { ...a, bgVideo: null, videoAudio: null };
+    });
+    setAssetNames((n) => ({ ...n, video: "" }));
+    void putMedia("video", null);
+    setProject((p) => ({ ...p, background: p.background === "video" ? (p.mode === "captions" ? "plain" : "room") : p.background }));
+  };
+
+  // The own files from the last visit come back.
+  useEffect(() => {
+    void getMedia("picture").then((m) => m && pickBackground(m.blob, m.name, true));
+    void getMedia("music").then((m) => m && pickMusic(m.blob, m.name, true));
+    void getMedia("video").then((m) => m && pickVideo(m.blob, m.name, true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function openProject(file: File | undefined) {
     if (!file) return;
@@ -609,14 +924,12 @@ export function Editor() {
       </header>
 
       <div>
-        {busy && (
+        {busy && !(status.phase === "writing" && ai.open) && (
           <div className="ed-status" role="status" aria-live="polite">
             <Loader2 size={16} className="animate-spin" style={{ flex: "none" }} />
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{status.note}</span>
             <div className="bar" style={{ flex: 1, minWidth: 60 }}><i style={{ width: `${Math.round(status.share * 100)}%` }} /></div>
-            {status.phase !== "writing" && (
-              <button type="button" className="btn btn-sm" onClick={() => abortRef.current?.abort()}><Square size={12} /> Stop</button>
-            )}
+            <button type="button" className="btn btn-sm" onClick={() => abortRef.current?.abort()}><Square size={12} /> Stop</button>
           </div>
         )}
         {error && !busy && (
@@ -637,14 +950,18 @@ export function Editor() {
           ))}
         </nav>
 
-        <section className="ed-panel" role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.name}>
+        <section className="ed-panel" role="tabpanel" aria-label={(TABS.find((t) => t.id === tab) ?? LINE_TAB).name}>
           {(() => {
-            const info = TABS.find((t) => t.id === tab)!;
+            const info = TABS.find((t) => t.id === tab) ?? LINE_TAB;
             return (
               <div className="ed-panel-head">
-                <span className="ed-panel-icon" aria-hidden="true">{info.icon}</span>
+                {tab === "line" ? (
+                  <button type="button" className="btn btn-ghost btn-icon ed-back" onClick={() => { setSelected(null); setTab("script"); }} aria-label="Back to the script" title="Back to the script"><ArrowLeft size={18} /></button>
+                ) : (
+                  <span className="ed-panel-icon" aria-hidden="true">{info.icon}</span>
+                )}
                 <div>
-                  <h2>{info.id === "cast" && !characters ? "Voices" : info.title}</h2>
+                  <h2>{tab === "line" && selected !== null ? `Line ${selected + 1} of ${parsed.lines.length}` : info.id === "cast" && !characters ? "Voices" : info.title}</h2>
                   <p>{info.id === "cast" && !characters ? "A voice for every name in the script." : info.desc}</p>
                 </div>
               </div>
@@ -670,40 +987,30 @@ export function Editor() {
               <Field label="Language" hint={language.hint}>
                 <Select<LanguageId> ariaLabel="Language" value={project.language} onChange={(v) => set("language", v)} options={LANGUAGES.map((l) => ({ value: l.id, label: l.name, hint: l.native }))} />
               </Field>
+              <button type="button" className="ai-cta" onClick={openAi} aria-haspopup="dialog">
+                <span className="ai-cta-icon" aria-hidden="true"><Sparkles size={18} /></span>
+                <span className="ai-cta-text">
+                  <b>Write with AI</b>
+                  <small>Gemini with your key, or paste from ChatGPT, Claude or any AI</small>
+                </span>
+                <ChevronRight size={18} aria-hidden="true" />
+              </button>
               <div>
-                <label className="lbl" htmlFor="script">Dialogue — Name (mood): words</label>
-                <textarea id="script" ref={scriptRef} className="field" rows={12} spellCheck={false} value={project.script} onChange={(e) => setScript(e.target.value)} placeholder={"Meena (happy): Hello!\nAmma: Hi Meena."} style={{ fontSize: 14.5 }} />
-                <p className="hint" style={{ marginTop: 6 }}>
-                  {parsed.lines.length} {parsed.lines.length === 1 ? "line" : "lines"} · about {Math.round(timeline.duration)} seconds
-                </p>
+                <div className="script-head">
+                  <label className="lbl" htmlFor="script">Dialogue</label>
+                  <code>Name (mood): words</code>
+                </div>
+                <textarea id="script" ref={scriptRef} className="field script-area" rows={12} spellCheck={false} value={project.script} onChange={(e) => setScript(e.target.value)} placeholder={"Meena (happy): Hello!\nAmma: Hi Meena."} />
+                <div className="script-foot">
+                  <span>{parsed.lines.length} {parsed.lines.length === 1 ? "line" : "lines"} · about {Math.round(timeline.duration)} s</span>
+                  <button type="button" className="link-btn" onClick={() => { setScript(SAMPLES[project.language].script); set("title", SAMPLES[project.language].title); }}>Load sample</button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Select<string> ariaLabel="Add a line for" placeholder="Add a line" leading={<Plus size={16} />} search value={null} onChange={(name) => insert(`${name}: `)} options={lineOptions} />
-                <Select<string> ariaLabel="Change the scene to" placeholder="Change scene" leading={<Clapperboard size={16} />} value={null} onChange={(id) => insert(`[bg: ${id}]`)} options={sceneOptions} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" className="btn" onClick={() => { setScript(SAMPLES[project.language].script); set("title", SAMPLES[project.language].title); }}>Load sample</button>
-                <button type="button" className="btn" aria-expanded={ai.open} onClick={() => setAi((a) => ({ ...a, open: !a.open }))} style={{ color: "var(--accent-strong)", borderColor: "var(--accent)" }}>
-                  <Sparkles size={16} /> Write with AI
-                </button>
+                <Select<string> ariaLabel="Add a line for" placeholder="Add line" leading={<Plus size={16} />} search value={null} onChange={(name) => insert(`${name}: `)} options={lineOptions} />
+                <Select<string> ariaLabel="Change the scene to" placeholder="Scene" leading={<Clapperboard size={16} />} value={null} onChange={(id) => insert(`[bg: ${id}]`)} options={sceneOptions} />
               </div>
               {parsed.notes.map((n) => <p key={n} className="note note-info">{n}</p>)}
-              {ai.open && (
-                <div className="card grid gap-3 p-3" style={{ background: "var(--surface-2)" }}>
-                  <div>
-                    <label className="lbl" htmlFor="ai-topic">What is the video about?</label>
-                    <input id="ai-topic" className="field" value={ai.topic} onChange={(e) => setAi({ ...ai, topic: e.target.value })} placeholder="A boy explains why he failed the exam" />
-                  </div>
-                  <Field label="Tone"><Select<string> ariaLabel="Tone" value={ai.tone} onChange={(v) => setAi({ ...ai, tone: v })} options={TONES} /></Field>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Lines"><Select<number> ariaLabel="Number of lines" value={ai.lines} onChange={(v) => setAi({ ...ai, lines: v })} options={[4, 5, 6, 8, 10, 12, 16, 20].map((n) => ({ value: n, label: `${n} lines` }))} /></Field>
-                    <Field label="People"><Select<number> ariaLabel="Number of people" value={ai.people} onChange={(v) => setAi({ ...ai, people: v })} options={[1, 2, 3, 4, 5].map((n) => ({ value: n, label: n === 1 ? "1 person" : `${n} people` }))} /></Field>
-                  </div>
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={aiScript}>
-                    <Sparkles size={16} /> Write it in {language.name}
-                  </button>
-                </div>
-              )}
               <details>
                 <summary className="hint" style={{ fontWeight: 700 }}>▸ Script tricks</summary>
                 <ul className="hint mt-2 grid gap-2 pl-5" style={{ listStyle: "disc" }}>
@@ -715,6 +1022,55 @@ export function Editor() {
               </details>
             </div>
           )}
+
+          {tab === "line" && (() => {
+            const i = selected ?? -1;
+            const line = parsed.lines[i];
+            const span = timeline.spans[i];
+            if (!line || !span) return <p className="hint">Pick a line on the timeline to edit it.</p>;
+            const spokenProblem = languageProblems([line], project.language)[0];
+            return (
+              <div className="grid gap-4" key={`${i}:${line.row}`}>
+                <div className="li-time">
+                  <span>{clock(span.start)} – {clock(span.end)}</span>
+                  <span>{(span.end - span.start).toFixed(1)} s{voices ? "" : " (estimated — no voice yet)"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Who says it">
+                    <Select<string> ariaLabel="Who says it" search value={line.speaker} onChange={(name) => patchLine(i, { speaker: name })} options={lineOptions} />
+                  </Field>
+                  <Field label="Mood">
+                    <Select<string> ariaLabel="Mood" value={line.mood ?? "normal"} onChange={(m) => patchLine(i, { mood: m as Mood })} options={MOODS.map((m) => ({ value: m, label: MOOD_NAMES[m] }))} />
+                  </Field>
+                </div>
+                <div>
+                  <label className="lbl" htmlFor="li-said">Spoken words {project.language === "tanglish" || project.language === "tamil" ? "(Tamil letters)" : project.language === "hindi" || project.language === "hinglish" ? "(Hindi letters)" : ""}</label>
+                  <textarea id="li-said" className="field" rows={3} defaultValue={line.text} onBlur={(e) => e.target.value.trim() !== line.text && patchLine(i, { text: e.target.value })} />
+                  {spokenProblem && <p className="hint li-warn">This line is {spokenProblem.why} — the {language.name} voice will read it oddly.</p>}
+                </div>
+                <div>
+                  <label className="lbl" htmlFor="li-sub">Subtitle <span className="li-opt">— leave empty to show the spoken words</span></label>
+                  <input id="li-sub" className="field" defaultValue={line.caption === line.text ? "" : line.caption} onBlur={(e) => e.target.value.trim() !== (line.caption === line.text ? "" : line.caption) && patchLine(i, { caption: e.target.value })} />
+                </div>
+                <div>
+                  <label className="lbl" htmlFor="li-pause">Pause before this line · {(line.pause ?? 0).toFixed(1)} s</label>
+                  <input id="li-pause" type="range" min={0} max={4} step={0.1} value={line.pause ?? 0} onChange={(e) => patchLine(i, { pause: Number(e.target.value) })} />
+                </div>
+                <div className="li-actions">
+                  <button type="button" className="btn btn-sm" onClick={() => hearLine(i)}><Play size={14} /> Play from here</button>
+                  <button type="button" className="btn btn-sm btn-icon" disabled={i === 0} onClick={() => shiftLine(i, -1)} aria-label="Move earlier" title="Move earlier"><ArrowUp size={15} /></button>
+                  <button type="button" className="btn btn-sm btn-icon" disabled={i >= parsed.lines.length - 1} onClick={() => shiftLine(i, 1)} aria-label="Move later" title="Move later"><ArrowDown size={15} /></button>
+                  <button type="button" className="btn btn-sm btn-icon" onClick={() => copyLine(i)} aria-label="Duplicate" title="Duplicate"><CopyPlus size={15} /></button>
+                  <button type="button" className="btn btn-sm btn-icon li-del" onClick={() => removeLine(i)} aria-label="Delete line" title="Delete line"><Trash2 size={15} /></button>
+                </div>
+                <div className="li-nav">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={i === 0} onClick={() => { selectLine(i - 1); player.seek(timeline.spans[i - 1].start + 0.01); }}>← Previous line</button>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={i >= parsed.lines.length - 1} onClick={() => { selectLine(i + 1); player.seek(timeline.spans[i + 1].start + 0.01); }}>Next line →</button>
+                </div>
+                <p className="hint">Changing the words or who says it records that line again when you play. Mood and pauses don&apos;t need a new recording.</p>
+              </div>
+            );
+          })()}
 
           {tab === "cast" && (
             <div className="grid gap-4">
@@ -781,10 +1137,38 @@ export function Editor() {
                   ))}
                   <button type="button" className="swatch" aria-pressed={project.background === "custom" && Boolean(assets.bgImage)} title="Use your own picture" onClick={() => (assets.bgImage ? set("background", "custom") : bgFileRef.current?.click())} style={{ background: "var(--surface-3)", color: "var(--muted)", display: "grid", placeItems: "center" }}>
                     <ImagePlus size={20} style={{ marginBottom: 12 }} />
-                    <span>{assets.bgImage ? "Your picture" : "Upload"}</span>
+                    <span>{assets.bgImage ? "Your picture" : "Picture"}</span>
+                  </button>
+                  <button type="button" className="swatch" aria-pressed={project.background === "video" && Boolean(assets.bgVideo)} title="Use your own video behind everything" onClick={() => (assets.bgVideo ? set("background", "video") : videoFileRef.current?.click())} style={{ background: "var(--surface-3)", color: "var(--muted)", display: "grid", placeItems: "center" }}>
+                    <Film size={20} style={{ marginBottom: 12 }} />
+                    <span>{assets.bgVideo ? "Your video" : "Video"}</span>
                   </button>
                 </div>
                 <input ref={bgFileRef} type="file" accept="image/*" hidden onChange={(e) => { void pickBackground(e.target.files?.[0]); e.target.value = ""; }} />
+                <input ref={videoFileRef} type="file" accept="video/*" hidden onChange={(e) => { void pickVideo(e.target.files?.[0]); e.target.value = ""; }} />
+                {loadingMedia && <p className="hint" style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}><Loader2 size={14} className="animate-spin" /> {loadingMedia}</p>}
+                {project.background === "video" && assets.bgVideo && (
+                  <div className="media-card">
+                    <div className="media-head">
+                      <Film size={16} />
+                      <b title={assetNames.video}>{assetNames.video || "Your video"}</b>
+                      <span>{clock(assets.bgVideo.duration || 0)}</span>
+                    </div>
+                    <div>
+                      <label className="lbl" htmlFor="video-start">Start the video at · {(project.videoStart ?? 0).toFixed(1)} s</label>
+                      <input id="video-start" type="range" min={0} max={Math.max(0, Math.floor(((assets.bgVideo.duration || 1) - 0.5) * 10) / 10)} step={0.1} value={project.videoStart ?? 0} onChange={(e) => set("videoStart", Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label className="lbl" htmlFor="video-vol">Video&apos;s own sound · {assets.videoAudio ? `${Math.round((project.videoVolume ?? 0) * 100)}%` : "this video has no sound"}</label>
+                      <input id="video-vol" type="range" min={0} max={1} step={0.05} disabled={!assets.videoAudio} value={project.videoVolume ?? 0} onChange={(e) => set("videoVolume", Number(e.target.value))} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" className="btn btn-sm" onClick={() => videoFileRef.current?.click()}><Upload size={14} /> Change video</button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={removeVideo}><Trash2 size={14} /> Remove</button>
+                    </div>
+                    <p className="hint" style={{ margin: 0 }}>It loops behind {characters ? "the characters" : "the words"} and is kept in this browser for next time. The sound is heard once the voices are recorded.</p>
+                  </div>
+                )}
                 {project.background === "plain" && (
                   <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 10 }}>
                     {PLAIN_COLORS.map(([c, name]) => (
@@ -853,13 +1237,38 @@ export function Editor() {
                 <Select<MusicId> ariaLabel="Music" value={project.music} onChange={(v) => (v === "custom" && !assets.music ? musicFileRef.current?.click() : set("music", v))} options={MUSIC} leading={<Music size={16} style={{ opacity: 0.6, flex: "none" }} />} />
               </Field>
               <input ref={musicFileRef} type="file" accept="audio/*" hidden onChange={(e) => { void pickMusic(e.target.files?.[0]); e.target.value = ""; }} />
+              {project.music !== "custom" && (
+                <button type="button" className="btn" onClick={() => musicFileRef.current?.click()}><Upload size={16} /> Add your own music</button>
+              )}
+              {loadingMedia && <p className="hint" style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}><Loader2 size={14} className="animate-spin" /> {loadingMedia}</p>}
               {project.music === "custom" && (
-                <button type="button" className="btn" onClick={() => musicFileRef.current?.click()}><Upload size={16} /> {assets.music ? `${assetNames.music} — change` : "Choose an audio file"}</button>
+                <div className="media-card">
+                  <div className="media-head">
+                    <Music size={16} />
+                    <b title={assetNames.music}>{assets.music ? assetNames.music || "Your music" : "No file yet"}</b>
+                    {assets.music && <span>{clock(assets.music.length / MIX_RATE)}</span>}
+                  </div>
+                  {assets.music && (
+                    <div>
+                      <label className="lbl" htmlFor="music-start">Start the music at · {(project.musicStart ?? 0).toFixed(1)} s</label>
+                      <input id="music-start" type="range" min={0} max={Math.max(0, Math.floor((assets.music.length / MIX_RATE - 1) * 10) / 10)} step={0.1} value={project.musicStart ?? 0} onChange={(e) => set("musicStart", Number(e.target.value))} />
+                    </div>
+                  )}
+                  <button type="button" className="btn btn-sm" onClick={() => musicFileRef.current?.click()}><Upload size={14} /> {assets.music ? "Change music" : "Choose an audio file"}</button>
+                  <p className="hint" style={{ margin: 0 }}>MP3, WAV or M4A — kept in this browser for next time. Use music you have the rights to.</p>
+                </div>
               )}
               <div>
                 <label className="lbl" htmlFor="music-vol">Music loudness · {Math.round(project.musicVolume * 100)}%</label>
                 <input id="music-vol" type="range" min={0} max={1} step={0.05} value={project.musicVolume} disabled={project.music === "none"} onChange={(e) => set("musicVolume", Number(e.target.value))} />
               </div>
+              <Switch checked={project.duck ?? false} onChange={(v) => set("duck", v)}>Music quieter while someone speaks</Switch>
+              {project.background === "video" && assets.videoAudio && (
+                <div>
+                  <label className="lbl" htmlFor="video-vol-2">Background video&apos;s sound · {Math.round((project.videoVolume ?? 0) * 100)}%</label>
+                  <input id="video-vol-2" type="range" min={0} max={1} step={0.05} value={project.videoVolume ?? 0} onChange={(e) => set("videoVolume", Number(e.target.value))} />
+                </div>
+              )}
               <div>
                 <label className="lbl" htmlFor="gap">Pause between lines · {project.lineGap.toFixed(2)} s</label>
                 <input id="gap" type="range" min={0.05} max={1} step={0.05} value={project.lineGap} onChange={(e) => set("lineGap", Number(e.target.value))} />
@@ -1071,9 +1480,225 @@ export function Editor() {
               )}
             </div>
           </div>
-          <Tracks timeline={timeline} time={player.time} onSeek={player.seek} project={project} colorOf={speakerColor} characters={characters} />
+          <Tracks
+            timeline={timeline} time={player.time} onSeek={player.seek} project={project} colorOf={speakerColor} characters={characters}
+            selected={tab === "line" ? selected : null} onSelect={selectLine} onOpen={(t) => { setSelected(null); setTab(t); }} videoName={assetNames.video}
+          />
         </main>
       </div>
+
+      {ai.open && (() => {
+        const writing = status.phase === "writing";
+        const review = ai.stage === "review";
+        const live = (
+          <div className="ai-live" role="status" aria-live="polite">
+            <div className="ai-live-head">
+              <Loader2 size={15} className="animate-spin" />
+              <span>{aiLive ? "Writing…" : "Gemini is thinking…"}</span>
+              {aiLive && <span className="ai-live-count">{parseScript(cleanPastedScript(aiLive).script).lines.length} lines</span>}
+            </div>
+            <pre>{aiLive || " "}</pre>
+          </div>
+        );
+        return (
+          <div className="dlg-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !writing) closeAi(); }}>
+            <div className="dlg" role="dialog" aria-modal="true" aria-labelledby="ai-title">
+              <header className="dlg-head">
+                <span className="ed-panel-icon" aria-hidden="true">{review ? <Check size={18} /> : <Sparkles size={18} />}</span>
+                <div>
+                  <h2 id="ai-title">{review ? "Check the script" : "Write the script with AI"}</h2>
+                  <p>{review ? "Read it, fix anything, then make the video. Nothing changes until you say so." : "Pick the language, say what happens — you check the script before anything is made."}</p>
+                </div>
+                <button type="button" className="btn btn-ghost btn-icon" onClick={closeAi} aria-label="Close"><X size={18} /></button>
+              </header>
+
+              {!review ? (
+                <div className="dlg-body">
+                  <div>
+                    <span className="lbl">Voice language — what the characters speak</span>
+                    <div className="lang-pick" role="radiogroup" aria-label="Voice language">
+                      {LANGUAGES.map((l) => (
+                        <button key={l.id} type="button" role="radio" aria-checked={project.language === l.id} disabled={writing} onClick={() => set("language", l.id)}>
+                          <b>{l.name}</b>
+                          <small>{LANGUAGE_VOICE[l.id]}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="lbl" htmlFor="ai-topic">What is the video about?</label>
+                    <textarea id="ai-topic" ref={aiTopicRef} className="field" rows={2} value={ai.topic} disabled={writing} onChange={(e) => setAi({ ...ai, topic: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && ai.via === "gemini") { e.preventDefault(); void aiScript(); } }} placeholder="A boy explains to his mom why he failed the exam" />
+                  </div>
+                  <div className="dlg-grid dlg-grid-3">
+                    <Field label="Tone"><Select<string> ariaLabel="Tone" value={ai.tone} onChange={(v) => setAi({ ...ai, tone: v })} options={TONES} /></Field>
+                    <Field label="Lines"><Select<number> ariaLabel="Number of lines" value={ai.lines} onChange={(v) => setAi({ ...ai, lines: v })} options={[4, 5, 6, 8, 10, 12, 16, 20].map((n) => ({ value: n, label: `${n} lines` }))} /></Field>
+                    <Field label="People">
+                      {keepCast ? (
+                        <div className="sel-btn" aria-disabled="true"><span className="sel-text">{project.cast.length} (current)</span></div>
+                      ) : (
+                        <Select<number> ariaLabel="Number of people" value={ai.people} onChange={(v) => setAi({ ...ai, people: v })} options={[1, 2, 3, 4, 5].map((n) => ({ value: n, label: n === 1 ? "1 person" : `${n} people` }))} />
+                      )}
+                    </Field>
+                  </div>
+                  {project.cast.length > 0 && (
+                    <div>
+                      <span className="lbl">Who&apos;s in it</span>
+                      <Seg<string>
+                        label="Who's in it"
+                        value={ai.pick ? "pick" : "keep"}
+                        onChange={(v) => setAi({ ...ai, pick: v === "pick" })}
+                        items={[{ id: "pick", name: "AI picks who fits the story" }, { id: "keep", name: `Keep ${project.cast.map((c) => c.name).join(", ")}` }]}
+                      />
+                    </div>
+                  )}
+
+                  <div className="dlg-tabs" role="tablist" aria-label="Which AI writes it">
+                    <button type="button" role="tab" aria-selected={ai.via === "gemini"} disabled={writing} onClick={() => { setAi({ ...ai, via: "gemini" }); setAiError(""); }}>
+                      <Sparkles size={16} />
+                      <span><b>Gemini</b><small>Writes it here, with your key</small></span>
+                    </button>
+                    <button type="button" role="tab" aria-selected={ai.via === "paste"} disabled={writing} onClick={() => { setAi({ ...ai, via: "paste" }); setAiError(""); }}>
+                      <Copy size={16} />
+                      <span><b>Copy &amp; paste</b><small>ChatGPT, Claude or any AI</small></span>
+                    </button>
+                  </div>
+
+                  {ai.via === "gemini" ? (
+                    writing ? live : null
+                  ) : (
+                    <ol className="ai-steps">
+                      <li>
+                        <div className="ai-step-head">
+                          <b>Copy the prompt and send it to any AI</b>
+                          <button type="button" className={`btn btn-sm ${copied ? "" : "btn-primary"}`} onClick={() => void copyPrompt()}>
+                            {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy prompt</>}
+                          </button>
+                        </div>
+                        <div className="ai-links">
+                          {OTHER_AIS.map((o) => (
+                            <a key={o.name} className="btn btn-sm" href={ai.topic.trim() ? o.url(scriptPrompt(aiAsk(), true)) : undefined} target="_blank" rel="noopener noreferrer" onClick={(e) => { if (!ai.topic.trim()) e.preventDefault(); void copyPrompt(); }}>
+                              {o.name} <ExternalLink size={13} />
+                            </a>
+                          ))}
+                        </div>
+                        <details className="ai-prompt">
+                          <summary>See the prompt</summary>
+                          <pre>{scriptPrompt(aiAsk(), true)}</pre>
+                        </details>
+                      </li>
+                      <li>
+                        <label className="ai-step-head" htmlFor="ai-paste"><b>Paste its reply here</b></label>
+                        <textarea id="ai-paste" className="field" rows={6} spellCheck={false} value={ai.pasted} onChange={(e) => { setAi({ ...ai, pasted: e.target.value }); setAiError(""); }} placeholder={"Paste the whole reply — the extra words around the script are cleaned up.\n\n[bg: classroom]\nChintu (sad): Amma, naan fail aayitten…"} />
+                        {ai.pasted.trim() && (
+                          pastedLines.length ? (
+                            <p className="ai-check" data-ok="true">
+                              <Check size={14} /> {pastedLines.length} lines · {[...new Set(pastedLines.map((l) => l.speaker))].join(", ")}
+                              {pastedScript.title && <> · title “{pastedScript.title}”</>}
+                            </p>
+                          ) : (
+                            <p className="ai-check">No lines found yet — each line should look like <code>Meena: words</code></p>
+                          )
+                        )}
+                      </li>
+                    </ol>
+                  )}
+                  {aiErrorNote}
+                </div>
+              ) : (
+                <div className="dlg-body">
+                  <div className="rv-summary">
+                    <span><b>{draftLines.length}</b> lines</span>
+                    <span>about <b>{Math.round(buildTimeline(draftLines, project, null).duration)}</b> s</span>
+                    <span>Voice: <b>{language.name}</b></span>
+                  </div>
+
+                  {writing ? live : draftProblems.length ? (
+                    <div className="note note-warn rv-problems">
+                      <div>
+                        <b>{draftProblems.length} {draftProblems.length === 1 ? "line isn't" : "lines aren't"} in {language.name}</b> — the voice reads exactly what is written, so {draftProblems.length === 1 ? "it" : "they"} would sound wrong.
+                        <ul>{draftProblems.slice(0, 4).map((p) => <li key={p.index}>Line {p.index + 1}: {p.why}</li>)}</ul>
+                      </div>
+                      <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void fixDraft()}><Sparkles size={14} /> Fix with Gemini</button>
+                    </div>
+                  ) : (
+                    <p className="note note-ok rv-ok"><Check size={15} /> Every line is in {language.name}{project.language === "tanglish" ? " (Tamil voice, English-letter subtitles)" : project.language === "hinglish" ? " (Hindi voice, English-letter subtitles)" : ""}.</p>
+                  )}
+
+                  <div>
+                    <label className="lbl" htmlFor="rv-title">Title on the video</label>
+                    <input id="rv-title" className="field" value={ai.draftTitle} maxLength={80} onChange={(e) => setAi({ ...ai, draftTitle: e.target.value })} placeholder={ai.topic.trim() || "A short hook"} />
+                  </div>
+                  <div>
+                    <span className="lbl">Who plays whom</span>
+                    <div className="rv-cast">
+                      {draftCast.map((m) => (
+                        <span key={m.name} className="rv-person">
+                          {characters ? <Avatar id={m.characterId} size={30} /> : <span className="cast-dot" style={{ background: speakerColor(m.name) }} />}
+                          <span><b>{m.name}</b><small>{characters ? `${characterById(m.characterId).name} · ` : ""}{m.voice}</small></span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="script-head">
+                      <span className="lbl">The script</span>
+                      <button type="button" className="link-btn" onClick={() => setDraftEdit((v) => !v)}>{draftEdit ? "Done editing" : "Edit"}</button>
+                    </div>
+                    {draftEdit ? (
+                      <textarea className="field script-area" rows={10} spellCheck={false} value={ai.draft} onChange={(e) => setAi({ ...ai, draft: e.target.value })} aria-label="Script" />
+                    ) : (
+                      <ol className="rv-lines">
+                        {draftLines.map((l, i) => {
+                          const problem = draftProblems.find((p) => p.index === i);
+                          return (
+                            <li key={i} data-bad={Boolean(problem)} style={{ borderLeftColor: SPEAKER_COLORS[Math.max(0, draftCast.findIndex((c) => c.name === l.speaker)) % SPEAKER_COLORS.length] }}>
+                              <div className="rv-who"><b>{l.speaker}</b>{l.mood && l.mood !== "normal" && <small>{MOOD_NAMES[l.mood]}</small>}{l.bg && <small>· {BACKGROUNDS.find((b) => b.id === l.bg)?.name ?? l.bg}</small>}</div>
+                              <div className="rv-said">{l.text}</div>
+                              {l.caption !== l.text && <div className="rv-sub">{l.caption}</div>}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    )}
+                  </div>
+                  {aiErrorNote}
+                </div>
+              )}
+
+              <footer className="dlg-foot">
+                {writing ? (
+                  <button type="button" className="btn" onClick={() => abortRef.current?.abort()}><Square size={13} /> Stop</button>
+                ) : review ? (
+                  <>
+                    <button type="button" className="btn btn-ghost" onClick={() => { setAi({ ...ai, stage: "write" }); setDraftEdit(false); setAiError(""); }}><ArrowLeft size={15} /> Back</button>
+                    {ai.via === "gemini" && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void aiScript()}><RefreshCw size={14} /> Write again</button>}
+                    <span className="dlg-spacer" />
+                    <button type="button" className="btn" disabled={!draftLines.length} onClick={() => confirmDraft(false)}>Use script</button>
+                    <button type="button" className="btn btn-accent" disabled={!draftLines.length || busy} onClick={() => confirmDraft(true)}>
+                      <Mic size={16} /> Make it with voice
+                    </button>
+                  </>
+                ) : ai.via === "gemini" ? (
+                  <>
+                    <button type="button" className="btn btn-ghost" onClick={closeAi}>Cancel</button>
+                    <button type="button" className="btn btn-accent" disabled={busy} onClick={() => void aiScript()}>
+                      <Sparkles size={16} /> Write it in {language.name}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-ghost" onClick={closeAi}>Cancel</button>
+                    <button type="button" className="btn btn-accent" disabled={!pastedLines.length} onClick={takePasted}>
+                      Next: check the script <ChevronRight size={16} />
+                    </button>
+                  </>
+                )}
+              </footer>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

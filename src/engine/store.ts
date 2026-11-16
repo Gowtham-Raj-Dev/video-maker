@@ -55,8 +55,12 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 
 function db(): Promise<IDBDatabase> {
   dbPromise ??= new Promise((resolve, reject) => {
-    const open = indexedDB.open("videomaker", 1);
-    open.onupgradeneeded = () => open.result.createObjectStore("voice");
+    const open = indexedDB.open("videomaker", 2);
+    open.onupgradeneeded = () => {
+      const names = open.result.objectStoreNames;
+      if (!names.contains("voice")) open.result.createObjectStore("voice");
+      if (!names.contains("media")) open.result.createObjectStore("media");
+    };
     open.onsuccess = () => resolve(open.result);
     open.onerror = () => reject(open.error);
   });
@@ -94,6 +98,37 @@ export async function putVoice(key: string, voice: SavedVoice) {
     tx.objectStore("voice").put(voice, key);
   } catch {
     // Not saved: it will be recorded again next time.
+  }
+}
+
+// ─── The visitor's own files (IndexedDB), so they are still there after a reload ──
+
+export type MediaKind = "picture" | "music" | "video";
+export interface SavedMedia {
+  name: string;
+  blob: Blob;
+}
+
+export async function putMedia(kind: MediaKind, media: SavedMedia | null) {
+  try {
+    const store = (await db()).transaction("media", "readwrite").objectStore("media");
+    if (media) store.put(media, kind);
+    else store.delete(kind);
+  } catch {
+    // Not kept: it is gone after a reload.
+  }
+}
+
+export async function getMedia(kind: MediaKind): Promise<SavedMedia | null> {
+  try {
+    const store = (await db()).transaction("media").objectStore("media");
+    return await new Promise((resolve) => {
+      const req = store.get(kind);
+      req.onsuccess = () => resolve((req.result as SavedMedia | undefined) ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
   }
 }
 

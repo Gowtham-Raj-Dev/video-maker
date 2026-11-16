@@ -98,8 +98,10 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Inside UTubeFlow, its dark theme from the first paint (the frame address says which). */}
+        <script dangerouslySetInnerHTML={{ __html: `try{if(window.parent!==window&&/[?&]embed=utubeflow/.test(location.search)&&/[?&]theme=dark/.test(location.search))document.documentElement.dataset.theme="dark"}catch(e){}` }} />
         {/* The hero's font (Instrument Sans, Latin): fetch it with the HTML. */}
         <link rel="preload" href="/fonts/instrument-sans-400-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />

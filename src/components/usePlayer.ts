@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { activeVideo, seekVideo, videoTimeAt } from "@/engine/media";
 import { drawFrame, frameSize } from "@/engine/renderer";
 import { MIX_RATE, type Assets, type Project, type Timeline } from "@/engine/types";
 
@@ -27,6 +28,9 @@ export function usePlayer(project: Project, timeline: Timeline, assets: Assets |
     [project, timeline, assets],
   );
 
+  // The visitor's background video plays along with the sound; when paused it is moved to the frame shown.
+  const video = activeVideo(project, assets);
+
   const silence = useCallback(() => {
     try {
       sourceRef.current?.stop();
@@ -34,7 +38,8 @@ export function usePlayer(project: Project, timeline: Timeline, assets: Assets |
       // Already stopped.
     }
     sourceRef.current = null;
-  }, []);
+    video?.pause();
+  }, [video]);
 
   const stop = useCallback(() => {
     silence();
@@ -56,9 +61,13 @@ export function usePlayer(project: Project, timeline: Timeline, assets: Assets |
         sourceRef.current = source;
       }
       startRef.current = { clock: audio.currentTime, from };
+      if (video) {
+        video.currentTime = videoTimeAt(project, video, from);
+        void video.play().catch(() => {});
+      }
       setPlaying(true);
     },
-    [timeline, silence],
+    [timeline, silence, video, project],
   );
 
   const play = useCallback(() => start(time >= timeline.duration - 0.05 ? 0 : time), [start, time, timeline.duration]);
@@ -78,8 +87,15 @@ export function usePlayer(project: Project, timeline: Timeline, assets: Assets |
   }, [timeline, stop]);
 
   useEffect(() => {
-    if (!playing) paint(time);
-  }, [paint, time, playing, redraw, W, H]);
+    if (playing) return;
+    paint(time);
+    if (!video) return;
+    let live = true;
+    void seekVideo(video, videoTimeAt(project, video, time)).then(() => live && paint(time));
+    return () => {
+      live = false;
+    };
+  }, [paint, time, playing, redraw, W, H, video, project]);
 
   useEffect(() => {
     if (!playing) return;
@@ -96,13 +112,17 @@ export function usePlayer(project: Project, timeline: Timeline, assets: Assets |
         stop();
         return;
       }
+      if (video && !video.seeking) {
+        const want = videoTimeAt(project, video, t);
+        if (Math.abs(video.currentTime - want) > 0.3) video.currentTime = want;
+      }
       paint(t);
       setTime(t);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, paint, timeline.duration, stop, start, loop]);
+  }, [playing, paint, timeline.duration, stop, start, loop, video, project]);
 
   useEffect(() => () => void audioRef.current?.close(), []);
 

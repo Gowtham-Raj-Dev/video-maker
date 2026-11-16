@@ -14,6 +14,10 @@ export interface Assets {
   bgSize: [number, number];
   /** Mono, at MIX_RATE. */
   music: Float32Array | null;
+  /** The visitor's own video, drawn behind everything when the background is "video". */
+  bgVideo?: HTMLVideoElement | null;
+  /** That video's sound, mono at MIX_RATE (null when it has none). */
+  videoAudio?: Float32Array | null;
 }
 export type LanguageId = "tamil" | "tanglish" | "english" | "telugu" | "hindi" | "hinglish";
 
@@ -28,6 +32,10 @@ export interface Line {
   mood?: Mood;
   /** A background set from this line on ("[bg: park]" in the script). */
   bg?: string;
+  /** Extra seconds of quiet before this line ("[pause: 1.5]" in the script). */
+  pause?: number;
+  /** Where the line is in the script text (its row), for editing it from the timeline. */
+  row?: number;
 }
 
 /** Who plays a name from the script. */
@@ -69,6 +77,14 @@ export interface Project {
   progressBar: boolean;
   /** Words shown after the last line, empty for none. */
   endCard: string;
+  /** Seconds skipped at the start of the visitor's own music track. */
+  musicStart?: number;
+  /** Music gets quieter while someone speaks. */
+  duck?: boolean;
+  /** The visitor's own video as the background ("video"): how loud its sound is (0 = muted). */
+  videoVolume?: number;
+  /** Seconds skipped at the start of the visitor's video. */
+  videoStart?: number;
 }
 
 /** A line placed in time, with its mouth movement. */

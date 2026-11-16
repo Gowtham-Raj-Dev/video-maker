@@ -45,6 +45,19 @@ const wait = (ms: number, signal?: AbortSignal) =>
     }, { once: true });
   });
 
+/** Every line's voice from this browser's store, or null if any line was never recorded. Spends nothing. */
+export async function cachedVoices(lines: Line[], cast: CastMember[]): Promise<LineVoice[] | null> {
+  if (!lines.length) return null;
+  const voices = Object.fromEntries(cast.map((c) => [c.name, c.voice]));
+  const out: LineVoice[] = [];
+  for (const line of lines) {
+    const saved = await getVoice(await voiceKey(["v1", `${voices[line.speaker]}:${line.text}`]));
+    if (!saved || saved.parts.length !== 1) return null;
+    out.push({ samples: saved.parts[0], rate: saved.rate });
+  }
+  return out;
+}
+
 /**
  * A voice for every line. Lines already recorded (same words, same voice) come
  * from this browser's store, so changing the look of a video never spends the
@@ -63,6 +76,13 @@ export async function recordVoices(
   const out: LineVoice[] = new Array(lines.length);
   let done = 0;
 
+  /** Each line is also kept on its own, so editing one line later records only that line again. */
+  const lineKey = (i: number) => voiceKey(["v1", `${voices[lines[i].speaker]}:${lines[i].text}`]);
+  const keepEach = async (indexes: number[], parts: Float32Array[], rate: number) => {
+    if (indexes.length < 2) return;
+    for (let k = 0; k < indexes.length; k++) await putVoice(await lineKey(indexes[k]), { rate, parts: [parts[k]] });
+  };
+
   const record = async (indexes: number[]): Promise<Float32Array[] | null> => {
     const turns = indexes.map((i) => ({ speaker: lines[i].speaker, text: lines[i].text }));
     const key = await voiceKey(["v1", ...turns.map((t) => `${voices[t.speaker]}:${t.text}`)]);
@@ -70,6 +90,7 @@ export async function recordVoices(
       const saved = await getVoice(key);
       if (saved && saved.parts.length === indexes.length) {
         indexes.forEach((i, k) => (out[i] = { samples: saved.parts[k], rate: saved.rate }));
+        await keepEach(indexes, saved.parts, saved.rate);
         return saved.parts;
       }
     }
@@ -94,10 +115,22 @@ export async function recordVoices(
     const copies = parts.map((p) => p.slice());
     indexes.forEach((i, k) => (out[i] = { samples: copies[k], rate: pcm.rate }));
     await putVoice(key, { rate: pcm.rate, parts: copies });
+    await keepEach(indexes, copies, pcm.rate);
     return copies;
   };
 
-  for (const chunk of chunksOf(lines, perLine)) {
+  // Lines already recorded on their own (same words, same voice) need no request at all.
+  const missing: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const saved = fresh ? null : await getVoice(await lineKey(i));
+    if (saved && saved.parts.length === 1) out[i] = { samples: saved.parts[0], rate: saved.rate };
+    else missing.push(i);
+  }
+  done = lines.length - missing.length;
+  // Runs of the lines still to record (positions in `missing`), back to line numbers.
+  const runs = chunksOf(missing.map((i) => lines[i]), perLine).map((run) => run.map((k) => missing[k]));
+
+  for (const chunk of runs) {
     const slot = activeSlot();
     const via = slot ? ` · key ${keys.indexOf(slot.key) + 1}, ${slot.model}` : "";
     onProgress({ done, total: lines.length, note: `Recording ${[...new Set(chunk.map((i) => lines[i].speaker))].join(" & ")}${via}…` });

@@ -34,7 +34,13 @@ let parentOrigin: string | null = null;
 export function linkToUTubeFlowParent(): () => void {
   const onMessage = (e: MessageEvent) => {
     if (e.source !== window.parent || !isUTubeFlowOrigin(e.origin)) return;
-    if ((e.data as { type?: string })?.type === "utubeflow:init") parentOrigin = e.origin;
+    const data = e.data as { type?: string; theme?: unknown };
+    if (data?.type !== "utubeflow:init") return;
+    parentOrigin = e.origin;
+    // UTubeFlow's light / dark theme: sent on load and again whenever it is switched there.
+    const dark = data.theme === "dark";
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0a1310" : "#F6F4EF");
   };
   window.addEventListener("message", onMessage);
   // Nothing private in a hello; the parent answers only if it is UTubeFlow, and we check its origin.

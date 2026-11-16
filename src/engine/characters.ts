@@ -140,6 +140,63 @@ export const CHARACTERS: Character[] = [
 
 export const characterById = (id: string) => CHARACTERS.find((c) => c.id === id) ?? CHARACTERS[0];
 
+/**
+ * Who each name is, for the AI that writes a script: so it casts a story with people who fit
+ * (a mother and her son, two friends…) and has them talk the way those people really would.
+ */
+const ROLES: Record<string, string> = {
+  Machan: "young man, the goofy friend. 'Machan' means 'buddy': only friends his age are with him, never his parents or family",
+  Nanban: "young man, the sensible friend of Machan",
+  Amma: "mother (of the young people in the story)",
+  Appa: "father (of the young people in the story)",
+  Thatha: "grandfather",
+  Paati: "grandmother",
+  Akka: "elder sister, young woman",
+  Thambi: "younger brother, teen boy",
+  Mama: "uncle (mother's brother)",
+  Athai: "aunt (father's sister)",
+  Chintu: "small boy, about 8",
+  Pappa: "little girl, about 5",
+  Meena: "girl, school or college student",
+  Priya: "college girl, the topper",
+  Divya: "young woman",
+  Riya: "teen girl, clever student",
+  Tara: "young woman",
+  Arjun: "boy, school or college student",
+  Karthik: "young man, student",
+  Babu: "boy, carefree student",
+  Surya: "young man",
+  Teacher: "school teacher (woman)",
+  Boss: "office boss (man)",
+  Doctor: "doctor (woman)",
+  Chef: "cook (man)",
+  Nurse: "nurse (woman)",
+  Vicky: "young man, show-off",
+  Rowdy: "local rowdy (man)",
+  Thalaivar: "politician (man)",
+  Techie: "software engineer (man)",
+  Postman: "postman",
+  Watchman: "watchman",
+  Vivasayi: "farmer (man)",
+  Cricketer: "young man who plays cricket",
+  "Gym Bro": "young man, gym fanatic",
+  "Kamala Aunty": "neighbour aunty",
+  Swathi: "young woman, influencer",
+  Mechanic: "mechanic (man)",
+  Driver: "auto-rickshaw driver (man)",
+  Annachi: "shopkeeper (man)",
+  Thief: "clumsy thief (man)",
+  Inspector: "police inspector (man)",
+  YouTuber: "YouTuber (young man)",
+};
+
+/** "Amma — mother … (woman). Sees everything, forgives nothing." */
+export function aboutCharacter(c: Character): string {
+  const voice = VOICES.find((v) => v.name === c.voice);
+  const role = ROLES[c.name] ?? (voice?.kind === "F" ? "woman" : "man");
+  return `${role}. ${c.blurb}`;
+}
+
 export const isThin = (look: Look | ThinLook): look is ThinLook => "kind" in look && look.kind === "rico";
 
 /** Gemini's speech voices. */

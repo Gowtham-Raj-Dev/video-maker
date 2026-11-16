@@ -335,14 +335,38 @@ function resampleInto(out: Float32Array, at: number, samples: Float32Array, rate
   }
 }
 
+/** 1 in the quiet, about 0.45 while a line is spoken, with soft slopes either side. */
+function duckCurve(spans: Span[], length: number, on: boolean): Float32Array {
+  const curve = new Float32Array(length).fill(1);
+  if (!on) return curve;
+  const slope = 0.25 * MIX_RATE;
+  const low = 0.45;
+  for (const s of spans) {
+    const a = Math.round(s.start * MIX_RATE);
+    const b = Math.round(s.end * MIX_RATE);
+    for (let i = Math.max(0, a - slope); i < Math.min(length, b + slope); i++) {
+      const edge = i < a ? (a - i) / slope : i > b ? (i - b) / slope : 0;
+      curve[i] = Math.min(curve[i], low + (1 - low) * edge);
+    }
+  }
+  return curve;
+}
+
 /** Every line placed in time, its mouth worked out, and the sound mixed. `voices` null makes a silent preview. */
-export function buildTimeline(lines: Line[], project: Project, voices: Array<{ samples: Float32Array; rate: number }> | null, ownMusic: Float32Array | null = null): Timeline {
+export function buildTimeline(
+  lines: Line[],
+  project: Project,
+  voices: Array<{ samples: Float32Array; rate: number }> | null,
+  ownMusic: Float32Array | null = null,
+  videoSound: Float32Array | null = null,
+): Timeline {
   const spans: Span[] = [];
   let cursor = LEAD_IN;
   const gap = project.lineGap ?? GAP;
   lines.forEach((line, i) => {
     const last = i === lines.length - 1;
     if (i) cursor += last && project.punch && lines.length > 2 ? Math.max(PUNCH_PAUSE, gap) : gap;
+    cursor += line.pause ?? 0;
     const voice = voices?.[i];
     const seconds = voice ? voice.samples.length / voice.rate : Math.max(1.1, line.text.length * 0.065);
     const mouth = voice ? mouthOf(voice.samples, voice.rate) : fakeMouth(seconds, i * 1.7);
@@ -353,17 +377,28 @@ export function buildTimeline(lines: Line[], project: Project, voices: Array<{ s
   if (!voices) return { spans, duration, audio: null, silent: true };
 
   const audio = new Float32Array(Math.ceil(duration * MIX_RATE));
+  // Music (and the video's own sound) dip while someone speaks, so the words stay clear.
+  const duck = duckCurve(spans, audio.length, project.duck ?? false);
   if (project.music === "custom") {
-    // The visitor's own track, looped under the whole video and faded at both ends.
+    // The visitor's own track from where they chose, looped under the whole video and faded at both ends.
     if (ownMusic?.length) {
       const gain = 0.3 * project.musicVolume;
       const fade = MIX_RATE * 0.8;
-      for (let i = 0; i < audio.length; i++) audio[i] += ownMusic[i % ownMusic.length] * gain * Math.min(1, i / fade, (audio.length - i) / fade);
+      const skip = Math.min(ownMusic.length - 1, Math.max(0, Math.round((project.musicStart ?? 0) * MIX_RATE)));
+      const loop = ownMusic.length - skip;
+      for (let i = 0; i < audio.length; i++) audio[i] += ownMusic[skip + (i % loop)] * gain * duck[i] * Math.min(1, i / fade, (audio.length - i) / fade);
     }
   } else if (project.music !== "none") {
     const music = makeMusic(project.music, duration);
     const gain = 0.22 * project.musicVolume;
-    for (let i = 0; i < audio.length; i++) audio[i] += music[i] * gain;
+    for (let i = 0; i < audio.length; i++) audio[i] += music[i] * gain * duck[i];
+  }
+  if (project.background === "video" && videoSound?.length && (project.videoVolume ?? 0) > 0) {
+    // The background video's own sound, in step with its picture (it loops the same way).
+    const gain = 0.8 * (project.videoVolume ?? 0);
+    const skip = Math.min(videoSound.length - 1, Math.max(0, Math.round((project.videoStart ?? 0) * MIX_RATE)));
+    const loop = videoSound.length - skip;
+    for (let i = 0; i < audio.length; i++) audio[i] += videoSound[skip + (i % loop)] * gain * duck[i];
   }
   spans.forEach((span, i) => resampleInto(audio, span.start, voices[i].samples, voices[i].rate, 0.95));
   if (project.sfx) {
