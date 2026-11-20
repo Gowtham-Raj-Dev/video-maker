@@ -4,6 +4,8 @@ import type { Metadata, Viewport } from "next";
 import "./google-fonts.css";
 import "./globals.css";
 import { Analytics } from "@/components/Analytics";
+import AdSenseScript from "@/components/AdSenseScript";
+import { ADSENSE_CLIENT } from "@/lib/adsense";
 import { SITE } from "@/lib/site";
 
 export const viewport: Viewport = { themeColor: "#F6F4EF", width: "device-width", initialScale: 1 };
@@ -105,12 +107,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* The hero's font (Instrument Sans, Latin): fetch it with the HTML. */}
         <link rel="preload" href="/fonts/instrument-sans-400-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {/* Google AdSense site verification (the tag itself loads after hydration, see AdSenseScript) */}
+        {ADSENSE_CLIENT ? <meta name="google-adsense-account" content={ADSENSE_CLIENT} /> : null}
         {/* CodeLove Analytics (admin.codelove.in) */}
         <script defer src="https://admin.codelove.in/t.js" />
       </head>
       <body>
         {children}
         <Analytics />
+        {ADSENSE_CLIENT ? <AdSenseScript client={ADSENSE_CLIENT} /> : null}
       </body>
     </html>
   );

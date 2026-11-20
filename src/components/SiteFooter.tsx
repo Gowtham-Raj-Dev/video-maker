@@ -75,6 +75,7 @@ export function SiteFooter() {
           <nav aria-label="Contact">
             <h2>Contact</h2>
             <ul>
+              <li><Link href="/contact/">Contact page</Link></li>
               <li><a href={WHATSAPP} target="_blank" rel="noopener noreferrer">WhatsApp</a></li>
               <li><a href={`mailto:${SITE.email}`}>Email</a></li>
               <li><a href={`${WHATSAPP}?text=${encodeURIComponent("Feature request for Video Maker: ")}`} target="_blank" rel="noopener noreferrer">Request a feature</a></li>
