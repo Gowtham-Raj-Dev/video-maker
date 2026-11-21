@@ -75,7 +75,7 @@ export default function Home() {
         <section className="hero">
           <div className="wrap hero-center">
             <p className="hero-kicker">Free AI video maker by CodeLove · Tamil, Telugu, Hindi &amp; English</p>
-            <h1 className="hero-title">Turn a script into a talking cartoon video.</h1>
+            <h1 className="hero-title">Free AI video maker: turn a script into a talking cartoon video.</h1>
             <p className="hero-sub">
               Write the dialogue. {CHARACTERS.length} ready-made characters speak it with AI voices, lip sync, word-by-word captions and music — or go text-only with big captions on a plain screen. Exported as an MP4 for Shorts, Reels and YouTube.
             </p>
@@ -116,6 +116,41 @@ export default function Home() {
                 referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
               />
+            </div>
+          </div>
+        </section>
+
+        <section id="make" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 className="section-title">A free AI video maker for every kind of short.</h2>
+              <p className="section-sub">Pick the kind of video you want to make. All of them start in the same <Link href="/editor/">free video editor</Link>.</p>
+            </div>
+            <div className="feature-list">
+              <div>
+                <h3>Text to video AI, free</h3>
+                <p>Type your text and get a finished video with big captions, an AI voice and music. Use <Link href="/editor/">text to video AI free</Link> for stories, facts and quotes, with no sign-up.</p>
+              </div>
+              <div>
+                <h3>Cartoon video maker</h3>
+                <p>Write a dialogue and ready-made characters act it out. It is a <Link href="/editor/">cartoon video maker</Link> with moods, gestures and scenes, so you do not need to draw anything.</p>
+              </div>
+              <div>
+                <h3>Talking cartoon maker</h3>
+                <p>Each character speaks with an AI voice and the mouth follows the sound. As a <Link href="/editor/">talking cartoon maker</Link> it works for funny conversations, school skits and explainers.</p>
+              </div>
+              <div>
+                <h3>YouTube Shorts maker</h3>
+                <p>Export 9:16 MP4 files ready to upload. As a <Link href="/editor/">YouTube Shorts maker</Link> it pairs with <a href="https://utubeflow.codelove.in" target="_blank" rel="noopener noreferrer">UTubeFlow</a> to schedule them.</p>
+              </div>
+              <div>
+                <h3>Tamil cartoon video maker</h3>
+                <p>Write in Tamil or Tanglish and pick a Tamil voice. This <Link href="/editor/">Tamil cartoon video maker</Link> also speaks Telugu, Hindi, Hinglish and English.</p>
+              </div>
+              <div>
+                <h3>CodeLove Video Maker</h3>
+                <p>CodeLove Video Maker is built by <a href="https://codelove.in" target="_blank" rel="noopener noreferrer">CodeLove</a> and is free to use. See our other tools in the footer, like <a href="https://videocut.codelove.in" target="_blank" rel="noopener noreferrer">Video Cut</a>.</p>
+              </div>
             </div>
           </div>
         </section>

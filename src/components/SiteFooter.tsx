@@ -7,6 +7,7 @@ const WHATSAPP = "https://wa.me/916369494396";
 
 const PRODUCT: Array<{ label: string; href: string }> = [
   { label: "Open the editor", href: "/editor/" },
+  { label: "Cartoon video maker", href: "/#make" },
   { label: "Characters", href: "/#cast" },
   { label: "Works with UTubeFlow", href: "/#utubeflow" },
   { label: "Languages", href: "/#languages" },

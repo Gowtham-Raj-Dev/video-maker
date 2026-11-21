@@ -6,10 +6,10 @@ export const SITE = {
   tagline: "Turn a script into a talking cartoon video.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://videomaker.codelove.in",
   // ~60 characters so Google shows it whole; the strongest words first.
-  title: "Free AI Video Maker – Script to Talking Cartoon Video | CodeLove",
+  title: "Free AI Video Maker: Talking Cartoon & Text to Video",
   // ~155 characters: what it is, what you get, why it's free.
   description:
-    "Free AI video maker by CodeLove. Type a script, get a talking cartoon or text video with AI voices, lip sync, subtitles & music. No sign-up, no watermark.",
+    "Free AI video maker and talking cartoon maker by CodeLove. Turn text to video with AI voices, lip sync and captions for YouTube Shorts. No sign-up.",
   /** The longer pitch, for social cards and structured data. */
   longDescription:
     "CodeLove Video Maker is a free AI video maker that runs in your browser. Type a dialogue and 66 cartoon characters act it out with real AI voices, lip sync, word-by-word subtitles and background music — or make a text-only video with big captions on a plain screen. Tamil, Tanglish, Telugu, Hindi, Hinglish and English. Export MP4 for YouTube Shorts, Instagram Reels and YouTube up to 4K. No sign-up, no watermark, your own free Gemini API key.",
@@ -34,6 +34,22 @@ export const NETWORK_LINKS: ReadonlyArray<{ label: string; href: string; title: 
 ];
 
 export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: "How do I make a text to video AI free?",
+    a: "Open the editor, choose “Text only” and type your text. Video Maker turns it into a video with big word-by-word captions, an AI voice and music, with no sign-up and no watermark. It is a free text to video AI that uses your own free Gemini key.",
+  },
+  {
+    q: "What is a talking cartoon maker?",
+    a: "A talking cartoon maker turns written dialogue into cartoon characters that speak it. In Video Maker you write the lines, pick a character and voice for each name, and the mouths move in sync with the sound. It works as a free cartoon video maker for Shorts, Reels and YouTube.",
+  },
+  {
+    q: "Can I make a Tamil cartoon video?",
+    a: "Yes. Video Maker is a Tamil cartoon video maker: write Tamil or Tanglish dialogue, pick a Tamil voice and your characters speak it with Tamil captions. Telugu, Hindi, Hinglish and English work the same way.",
+  },
+  {
+    q: "Is this a YouTube Shorts maker?",
+    a: "Yes. Export in 9:16 and the video is ready for YouTube Shorts, Instagram Reels or TikTok. You can then send it to UTubeFlow to schedule it on YouTube for free.",
+  },
   {
     q: "Is this a free AI video maker?",
     a: "Yes. CodeLove Video Maker turns a typed script into a finished video with AI voices, lip-synced cartoon characters, subtitles and music — free, with no sign-up and no watermark. The AI voices and the optional AI script writer use Google Gemini through your own free API key.",
