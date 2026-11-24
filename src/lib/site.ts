@@ -31,6 +31,7 @@ export const NETWORK_LINKS: ReadonlyArray<{ label: string; href: string; title: 
   { label: "Video to Images", href: "https://videotoimages.codelove.in", title: "Extract frames, compress & convert videos" },
   { label: "Video Cut", href: "https://videocut.codelove.in", title: "Split long videos into Shorts" },  { label: "Free YouTube Automation", href: "https://utubeflow.codelove.in", title: "Bulk upload & schedule YouTube videos" },
   { label: "Free Java Games", href: "https://javaplay.codelove.in", title: "Play old Java J2ME phone games" },
+  { label: "Webly", href: "https://webly.codelove.in", title: "Website analytics, deep SEO audit & automated problem fixes" },
 ];
 
 export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
