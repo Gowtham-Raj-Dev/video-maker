@@ -111,6 +111,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {ADSENSE_CLIENT ? <meta name="google-adsense-account" content={ADSENSE_CLIENT} /> : null}
         {/* CodeLove Analytics (admin.codelove.in) */}
         <script defer src="https://admin.codelove.in/t.js" />
+        {/* Google tag (gtag.js) */}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-E7XZ96YCVC" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-E7XZ96YCVC');`,
+          }}
+        />
+        <script defer src="/assets/main.js" />
       </head>
       <body>
         {children}
