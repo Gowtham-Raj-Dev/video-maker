@@ -121,7 +121,6 @@ gtag('js', new Date());
 gtag('config', 'G-E7XZ96YCVC');`,
           }}
         />
-        <script defer src="/assets/main.js" />
       </head>
       <body>
         {children}
